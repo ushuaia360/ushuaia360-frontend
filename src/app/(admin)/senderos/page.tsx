@@ -81,10 +81,6 @@ const statusStyle: Record<string, string> = {
 };
 
 export default function SenderosPage() {
-  const activos = trails.filter((t) => t.status === "Activo").length;
-  const revision = trails.filter((t) => t.status === "En revisión").length;
-  const borrador = trails.filter((t) => t.status === "Borrador").length;
-
   return (
     <div>
       <PageHeader title="Senderos">

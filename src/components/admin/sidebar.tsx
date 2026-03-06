@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
+  House,
   Users,
   MapPin,
   MessageSquare,
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const nav = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
+  { href: "/", label: "Home", icon: House },
   { href: "/usuarios", label: "Usuarios", icon: Users },
   { href: "/senderos", label: "Senderos", icon: MapPin },
   { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
