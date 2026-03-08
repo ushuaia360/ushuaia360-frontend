@@ -33,28 +33,12 @@ export default function AuthLayout({
             Panel de administración
           </p>
           <h2 className="text-[2rem] font-medium leading-snug tracking-tight text-white">
-            Administrá los<br />senderos de Ushuaia
+            Administrá la<br />app Ushuaia360
           </h2>
           <p className="mt-4 max-w-xs text-sm font-light leading-relaxed text-white/40">
-            Gestioná trails, usuarios y comentarios desde un único panel centralizado.
+            Gestioná senderos, usuarios, comentarios y más desde un único panel centralizado.
           </p>
 
-          {/* Stats */}
-          <div className="mt-10 flex gap-8">
-            {[
-              { icon: MapPin, value: "47", label: "Senderos" },
-              { icon: Users, value: "1.2k", label: "Usuarios" },
-              { icon: MessageSquare, value: "8", label: "Pendientes" },
-            ].map(({ icon: Icon, value, label }) => (
-              <div key={label}>
-                <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-lg bg-white/5">
-                  <Icon className="h-3.5 w-3.5 text-[#3FA9F5]/70" strokeWidth={1.75} />
-                </div>
-                <p className="text-xl font-medium text-white">{value}</p>
-                <p className="mt-0.5 text-[11px] text-white/30">{label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Bottom note */}

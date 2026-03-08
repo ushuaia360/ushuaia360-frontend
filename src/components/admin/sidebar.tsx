@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   House,
   Users,
@@ -14,17 +14,77 @@ import {
   Mountain,
 } from "lucide-react";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+
 const nav = [
   { href: "/", label: "Home", icon: House },
   { href: "/usuarios", label: "Usuarios", icon: Users },
   { href: "/senderos", label: "Senderos", icon: MapPin },
-  { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
+  // { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
 ];
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url?: string;
+  is_admin: boolean;
+}
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Error logging out:", error);
+      // Redirigir de todas formas
+      router.push("/login");
+      router.refresh();
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   const handleMouseEnter = () => {
     if (!collapsed) return;
@@ -111,26 +171,61 @@ export default function Sidebar() {
       </nav>
 
       {/* User */}
-      {!collapsed && (
-        <div className="border-t border-[#EBEBEB] p-2">
-          <div className="flex items-center gap-2.5 rounded-md px-2.5 py-2">
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#3FA9F5] text-xs font-medium text-white">
-              A
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-xs font-medium text-gray-800">
-                Administrador
-              </span>
-              <span className="truncate text-[11px] text-gray-400">
-                admin@ushuaia360.com
-              </span>
-            </div>
-            <button className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-[#E65C00]">
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
+      <div className="border-t border-[#EBEBEB] p-2">
+        {loading ? (
+          <div className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 animate-pulse" />
+            {!collapsed && (
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                <div className="h-2.5 w-32 bg-gray-200 rounded animate-pulse" />
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        ) : user ? (
+          <div className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.full_name}
+                className="h-7 w-7 flex-shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#3FA9F5] text-xs font-medium text-white">
+                {getInitials(user.full_name)}
+              </div>
+            )}
+            {!collapsed && (
+              <>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-xs font-medium text-gray-800">
+                    {user.full_name}
+                  </span>
+                  <span className="truncate text-[11px] text-gray-400">
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-[#E65C00]"
+                  title="Cerrar sesión"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+            {collapsed && (
+              <button
+                onClick={handleLogout}
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 flex h-6 w-6 items-center justify-center rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-[#E65C00]"
+                title="Cerrar sesión"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ) : null}
+      </div>
     </aside>
   );
 }

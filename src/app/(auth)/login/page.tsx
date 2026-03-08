@@ -1,7 +1,68 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mountain } from "lucide-react";
+import { Mountain, Loader2 } from "lucide-react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050/api/v1';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  
+  // Obtener el parámetro redirect de la URL
+  const getRedirectUrl = () => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("redirect") || "/senderos";
+    }
+    return "/senderos";
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Error al iniciar sesión");
+        setLoading(false);
+        return;
+      }
+
+      // Verificar que el usuario sea admin
+      if (!data.user?.is_admin) {
+        setError("No tenés permisos de administrador");
+        setLoading(false);
+        return;
+      }
+
+      // Redirigir al admin o a la URL de destino
+      const redirectTo = getRedirectUrl();
+      router.push(redirectTo);
+      router.refresh();
+    } catch (err: any) {
+      setError("Error al conectar con el servidor");
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-[400px]">
       {/* Mobile logo (hidden on lg) */}
@@ -22,8 +83,15 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* Form */}
-      <form className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-500">
             Correo electrónico
@@ -31,7 +99,11 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="admin@ushuaia360.com"
-            className="w-full rounded-xl border border-[#E4E4E7] bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-300 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-all focus:border-[#3FA9F5] focus:ring-3 focus:ring-[#3FA9F5]/10"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            className="w-full rounded-xl border border-[#E4E4E7] bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-300 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-all focus:border-[#3FA9F5] focus:ring-3 focus:ring-[#3FA9F5]/10 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -42,41 +114,29 @@ export default function LoginPage() {
           <input
             type="password"
             placeholder="••••••••"
-            className="w-full rounded-xl border border-[#E4E4E7] bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-300 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-all focus:border-[#3FA9F5] focus:ring-3 focus:ring-[#3FA9F5]/10"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={loading}
+            className="w-full rounded-xl border border-[#E4E4E7] bg-white px-4 py-3 text-sm text-gray-800 placeholder-gray-300 shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-all focus:border-[#3FA9F5] focus:ring-3 focus:ring-[#3FA9F5]/10 disabled:opacity-50 disabled:cursor-not-allowed"
           />
-          <Link
-            href="/forgot-password"
-            className="text-xs text-[#3FA9F5] transition-opacity hover:opacity-70"
-          >
-            Olvidé mi contraseña
-          </Link>
         </div>
 
         <button
           type="submit"
-          className="w-full rounded-xl bg-[#3FA9F5] py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(63,169,245,0.35)] transition-all hover:bg-[#2b9de8] hover:shadow-[0_4px_12px_rgba(63,169,245,0.4)] active:scale-[0.99]"
+          disabled={loading}
+          className="w-full rounded-xl bg-[#3FA9F5] py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(63,169,245,0.35)] transition-all hover:bg-[#2b9de8] hover:shadow-[0_4px_12px_rgba(63,169,245,0.4)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#3FA9F5] flex items-center justify-center gap-2"
         >
-          Ingresar
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Ingresando...
+            </>
+          ) : (
+            "Ingresar"
+          )}
         </button>
       </form>
-
-      {/* Divider */}
-      <div className="my-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-[#EBEBEB]" />
-        <span className="text-[11px] text-gray-300">o</span>
-        <div className="h-px flex-1 bg-[#EBEBEB]" />
-      </div>
-
-      {/* Sign up link */}
-      <p className="text-center text-sm font-light text-gray-400">
-        ¿No tenés cuenta?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-gray-700 underline-offset-2 transition-colors hover:text-[#3FA9F5]"
-        >
-          Registrate
-        </Link>
-      </p>
     </div>
   );
 }
