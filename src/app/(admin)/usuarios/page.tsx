@@ -1,84 +1,48 @@
-const users = [
-  {
-    name: "Pablo Rodríguez",
-    initials: "PR",
-    email: "pablo@ushuaia360.com",
-    role: "Admin",
-    status: "Activo",
-    joined: "12 ene 2024",
-  },
-  {
-    name: "María García",
-    initials: "MG",
-    email: "maria@ushuaia360.com",
-    role: "Moderador",
-    status: "Activo",
-    joined: "28 ene 2024",
-  },
-  {
-    name: "Lucas Martínez",
-    initials: "LM",
-    email: "lucas.m@gmail.com",
-    role: "Usuario",
-    status: "Activo",
-    joined: "3 feb 2024",
-  },
-  {
-    name: "Ana Fernández",
-    initials: "AF",
-    email: "ana.fer@gmail.com",
-    role: "Usuario",
-    status: "Activo",
-    joined: "14 feb 2024",
-  },
-  {
-    name: "Diego Sánchez",
-    initials: "DS",
-    email: "dsanchez@hotmail.com",
-    role: "Usuario",
-    status: "Inactivo",
-    joined: "22 feb 2024",
-  },
-  {
-    name: "Valentina López",
-    initials: "VL",
-    email: "vlopez@gmail.com",
-    role: "Usuario",
-    status: "Activo",
-    joined: "1 mar 2024",
-  },
-  {
-    name: "Martín Pérez",
-    initials: "MP",
-    email: "mperez@gmail.com",
-    role: "Usuario",
-    status: "Activo",
-    joined: "8 mar 2024",
-  },
-  {
-    name: "Sofía Ramírez",
-    initials: "SR",
-    email: "sofiar@gmail.com",
-    role: "Moderador",
-    status: "Activo",
-    joined: "15 mar 2024",
-  },
-];
+"use client";
 
 import PageHeader from "@/components/admin/page-header";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 const roleStyle: Record<string, string> = {
-  Admin: "bg-purple-50 text-purple-700",
-  Moderador: "bg-[#EBF5FE] text-[#3FA9F5]",
-  Usuario: "bg-gray-100 text-gray-600",
+  Admin: "bg-purple-200 text-purple-700",
+  Usuario: "bg-blue-500 text-white",
 };
 
 const statusStyle: Record<string, string> = {
-  Activo: "bg-emerald-50 text-emerald-700",
-  Inactivo: "bg-gray-100 text-gray-400",
+  Activo: "bg-green-500 text-white",
+  Suspendido: "bg-red-500 text-white",
 };
+const dateFormatter = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatCreatedAt(createdAt: string | undefined): string {
+  if (!createdAt) return "—";
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? createdAt : dateFormatter.format(date);
+}
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url?: string;
+  is_admin: boolean;
+  created_at?: string;
+}
 
 export default function UsuariosPage() {
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.getUsers().then((res: any) => setUsers(res.users));
+  }, []);
+
   return (
     <div>
       <PageHeader title="Usuarios">
@@ -98,7 +62,6 @@ export default function UsuariosPage() {
         <select className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-600 outline-none transition-colors focus:border-[#3FA9F5]">
           <option>Todos los roles</option>
           <option>Admin</option>
-          <option>Moderador</option>
           <option>Usuario</option>
         </select>
         <select className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-600 outline-none transition-colors focus:border-[#3FA9F5]">
@@ -109,23 +72,23 @@ export default function UsuariosPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[#F0F0F0]">
-              <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+      <div className="overflow-hidden rounded-2xl border border-[#EBEBEB] bg-white">
+        <table className="w-full table-fixed">
+          <thead className="py-3">
+            <tr className="border-b border-[#F0F0F0] bg-gray-50/60">
+              <th className="w-[30%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 Usuario
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              <th className="w-[15%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 Rol
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              <th className="w-[15%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 Estado
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              <th className="w-[25%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 Registrado
               </th>
-              <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              <th className="w-[15%] px-6 py-3 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 Acciones
               </th>
             </tr>
@@ -134,45 +97,44 @@ export default function UsuariosPage() {
             {users.map((u) => (
               <tr
                 key={u.email}
-                className="transition-colors hover:bg-gray-50/50"
+                className="transition-colors hover:bg-gray-50/80"
               >
-                <td className="px-4 py-3">
+                <td className="px-6 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#EBF5FE] text-xs font-medium text-[#3FA9F5]">
-                      {u.initials}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EBF5FE] text-xs font-medium text-[#3FA9F5]">
+                      {u.full_name.charAt(0)}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">
-                        {u.name}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-800">
+                        {u.full_name}
                       </p>
-                      <p className="text-xs text-gray-400">{u.email}</p>
+                      <p className="truncate text-xs text-gray-400">
+                        {u.email}
+                      </p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-6 py-3 align-middle">
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${roleStyle[u.role]}`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${roleStyle[u.is_admin ? "Admin" : "Usuario"]}`}
                   >
-                    {u.role}
+                    {u.is_admin ? "Admin" : "Usuario"}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-6 py-3 align-middle">
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusStyle[u.status]}`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusStyle[u.is_suspended ? "Suspendido" : "Activo"]}`}
                   >
-                    {u.status}
-                  </span>
+                    {u.is_suspended ? "Suspendido" : "Activo"}
+                  </span> 
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-500">{u.joined}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
-                      Editar
-                    </button>
-                    <button className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500">
-                      Eliminar
-                    </button>
-                  </div>
+                <td className="px-6 py-3 text-sm text-gray-500">
+                  {formatCreatedAt(u.created_at)}
+                </td>
+                <td className="px-6 py-3 text-right">
+                  <button className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-medium text-red-500 transition-colors hover:border-red-200 hover:bg-red-100">
+                    Suspender
+                  </button>
                 </td>
               </tr>
             ))}

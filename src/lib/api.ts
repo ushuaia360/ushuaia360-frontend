@@ -27,7 +27,7 @@ async function apiRequest<T>(
   };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -105,5 +105,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  // Users
+  getUsers: async () => {
+    return apiRequest<{ users: any[] }>('/users');
   },
 };
