@@ -21,7 +21,7 @@ interface MediaFile {
   order: number;
 }
 
-type PointOfInterestType = "mirador" | "peligro" | "agua" | "descanso";
+type PointOfInterestType = "inicio" | "fin" | "mirador" | "peligro" | "agua" | "descanso" | "refugio" | "cruce" | "campamento" | "cascada" | "vista" | "informacion";
 
 interface PointOfInterest {
   id: string;
@@ -45,6 +45,7 @@ export default function EditarSenderoPage() {
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
+    description: "",
     difficulty: "",
     route_type: "",
     region: "Tierra del Fuego",
@@ -93,6 +94,7 @@ export default function EditarSenderoPage() {
         setFormData({
           name: trail.region || "",
           slug: trail.slug || "",
+          description: trail.description || "",
           difficulty: trail.difficulty || "",
           route_type: trail.route_type || "",
           region: trail.region || "Tierra del Fuego",
@@ -454,6 +456,7 @@ export default function EditarSenderoPage() {
               // Solo incluir campos que tienen valor
               if (formData.difficulty) trailData.difficulty = formData.difficulty;
               if (formData.route_type) trailData.route_type = formData.route_type;
+              if (formData.description) trailData.description = formData.description;
               if (formData.region) trailData.region = formData.region;
               if (formData.distance_km) trailData.distance_km = parseFloat(formData.distance_km);
               if (formData.elevation_gain) trailData.elevation_gain = parseInt(formData.elevation_gain);
@@ -520,6 +523,20 @@ export default function EditarSenderoPage() {
                       URL: {formData.slug}
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Descripción
+                  </label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    placeholder="Descripción detallada del sendero..."
+                    rows={4}
+                    className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                  />
                 </div>
 
                 <div>
@@ -838,10 +855,18 @@ export default function EditarSenderoPage() {
                           }
                           className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-1.5 text-sm text-gray-800 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                         >
+                          <option value="inicio">Inicio del Sendero</option>
+                          <option value="fin">Fin del Sendero</option>
                           <option value="mirador">Mirador</option>
+                          <option value="vista">Vista Panorámica</option>
                           <option value="peligro">Zona de Peligro</option>
                           <option value="agua">Fuente de Agua</option>
                           <option value="descanso">Área de Descanso</option>
+                          <option value="refugio">Refugio</option>
+                          <option value="campamento">Campamento</option>
+                          <option value="cruce">Cruce de Caminos</option>
+                          <option value="cascada">Cascada</option>
+                          <option value="informacion">Punto de Información</option>
                         </select>
                       </div>
 

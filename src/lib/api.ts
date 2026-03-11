@@ -111,4 +111,18 @@ export const api = {
   getUsers: async () => {
     return apiRequest<{ users: any[] }>('/users');
   },
+
+  suspendUser: async (userId: string, isSuspended: boolean) => {
+    return apiRequest<{ message: string; user: any }>(`/users/${userId}/suspend`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_suspended: isSuspended }),
+    });
+  },
+
+  createAdminUser: async (data: { email: string; full_name: string; password: string }) => {
+    return apiRequest<{ message: string; user: any }>('/users/admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };

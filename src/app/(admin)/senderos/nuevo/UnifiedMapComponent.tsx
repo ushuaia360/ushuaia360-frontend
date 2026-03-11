@@ -264,13 +264,13 @@ export default function UnifiedMapComponent({
     };
   }, []); // Solo ejecutar una vez al montar
 
-  // Efecto separado para invalidar tamaño cuando cambia el contenedor
+  // Efecto separado para invalidar tamaño cuando cambia el contenedor o el punto principal
   useEffect(() => {
     if (mapInstanceRef.current) {
       const timeoutId = setTimeout(() => {
         try {
           mapInstanceRef.current.invalidateSize();
-          // Si hay un mapPoint, centrar el mapa en él
+          // Si hay un mapPoint, centrar el mapa en él (solo cuando cambia mapPoint, no routeSegments)
           if (mapPoint && Array.isArray(mapPoint) && mapPoint.length >= 2) {
             mapInstanceRef.current.setView([mapPoint[0], mapPoint[1]], 13);
           }
@@ -280,7 +280,7 @@ export default function UnifiedMapComponent({
       }, 200);
       return () => clearTimeout(timeoutId);
     }
-  }, [mapPoint, routeSegments]);
+  }, [mapPoint]); // Removido routeSegments para evitar resetear zoom al agregar waypoints
 
   // Actualizar click handler cuando cambian los modos
   useEffect(() => {
@@ -496,7 +496,11 @@ export default function UnifiedMapComponent({
 
     const updateRoute = async () => {
       try {
-        const L = (window as any).L || await import("leaflet");
+        const L = (window as any).L;
+        if (!L) {
+          console.warn("Leaflet not loaded yet");
+          return;
+        }
 
         // Remover marcadores y polyline anteriores
         routeMarkersRef.current.forEach((m) => {
@@ -569,11 +573,8 @@ export default function UnifiedMapComponent({
           routePolylineRef.current = polyline;
         }
 
-        // Ajustar vista
-        if (routeSegments.length > 0 && newMarkers.length > 0) {
-          const group = new (L as any).FeatureGroup(newMarkers);
-          mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
-        }
+        // No ajustar vista automáticamente para evitar resetear el zoom
+        // El usuario puede hacer zoom manualmente según necesite
       } catch (err) {
         console.error("Error updating route:", err);
       }
