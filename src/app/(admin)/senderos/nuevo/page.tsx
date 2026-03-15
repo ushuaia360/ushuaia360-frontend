@@ -296,6 +296,9 @@ export default function NuevoSenderoPage() {
                 route_type: formData.route_type,
               };
 
+              // Nombre (obligatorio desde la UI)
+              if (formData.name) trailData.name = formData.name;
+
               // Agregar campos opcionales si tienen valor
               if (formData.description) trailData.description = formData.description;
               if (formData.region) trailData.region = formData.region;

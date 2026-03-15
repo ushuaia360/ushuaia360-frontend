@@ -92,7 +92,7 @@ export default function EditarSenderoPage() {
 
         // Mapear datos del backend al formulario
         setFormData({
-          name: trail.region || "",
+          name: trail.name || "",
           slug: trail.slug || "",
           description: trail.description || "",
           difficulty: trail.difficulty || "",
@@ -454,6 +454,7 @@ export default function EditarSenderoPage() {
               const trailData: any = {};
 
               // Solo incluir campos que tienen valor
+              if (formData.name) trailData.name = formData.name;
               if (formData.difficulty) trailData.difficulty = formData.difficulty;
               if (formData.route_type) trailData.route_type = formData.route_type;
               if (formData.description) trailData.description = formData.description;

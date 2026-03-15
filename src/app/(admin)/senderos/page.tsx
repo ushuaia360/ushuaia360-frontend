@@ -33,6 +33,7 @@ const statusLabels: Record<number, string> = {
 interface Trail {
   id: string;
   slug: string;
+  name?: string;
   difficulty: string;
   route_type: string;
   region?: string;
@@ -85,7 +86,7 @@ export default function SenderosPage() {
   };
 
   const handleDeleteClick = (trail: Trail) => {
-    setTrailToDelete({ id: trail.id, name: trail.region || trail.slug || "este sendero" });
+    setTrailToDelete({ id: trail.id, name: trail.name || trail.region || trail.slug || "este sendero" });
     setShowDeleteModal(true);
   };
 
@@ -106,6 +107,7 @@ export default function SenderosPage() {
 
   const filteredTrails = trails.filter((trail) => {
     const matchesSearch = !searchTerm || 
+      trail.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       trail.slug?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       trail.region?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
@@ -160,8 +162,42 @@ export default function SenderosPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-gray-500">Cargando senderos...</p>
+          <div className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#F0F0F0]">
+                  {["Sendero", "Dificultad", "Duración", "Distancia", "Estado", "Acciones"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F5F5F5]">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-40 rounded bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-5 w-16 rounded-full bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-14 rounded bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-12 rounded bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-5 w-20 rounded-full bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="ml-auto h-4 w-24 rounded bg-gray-100" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : filteredTrails.length === 0 ? (
           <div className="rounded-xl border border-[#EBEBEB] bg-white p-12 text-center">
@@ -200,7 +236,7 @@ export default function SenderosPage() {
                   >
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-800">
-                        {trail.region || trail.slug || "Sin nombre"}
+                        {trail.name || trail.region || trail.slug || "Sin nombre"}
                       </p>
                     </td>
                     <td className="px-4 py-3">
