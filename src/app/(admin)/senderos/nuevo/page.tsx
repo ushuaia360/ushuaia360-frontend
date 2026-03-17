@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/admin/page-header";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
+import { uploadFile } from "@/lib/supabaseClient";
+import { compressToWebp, isAllowed } from "@/lib/image";
 
 // Componente de mapa dinámico para evitar problemas de SSR
 const UnifiedMapComponent = dynamic(() => import("./UnifiedMapComponent"), { ssr: false });
@@ -78,7 +80,7 @@ export default function NuevoSenderoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value, type } = e.target;
     setFormData((prev) => {
@@ -115,10 +117,31 @@ export default function NuevoSenderoPage() {
   };
 
   const determineMediaType = (file: File): MediaType => {
-    // Por ahora, asumimos que el usuario seleccionará el tipo
-    // En producción, esto podría detectarse automáticamente
+    if (file.type.startsWith("video/")) return "video";
     return "image";
   };
+
+  /**
+   * Compresses an image to WebP (or leaves HEIC/video as-is),
+   * uploads to Supabase and returns the public URL.
+   * storagePath example: "trail-uuid/1234567890-photo.webp"
+   */
+  async function prepareAndUpload(file: File, storagePath: string): Promise<string> {
+    if (file.type.startsWith("video/")) {
+      const ext = file.name.split(".").pop() || "mp4";
+      const videoPath = storagePath.replace(/\.[^.]+$/, `.${ext}`);
+      return uploadFile(videoPath, file, file.type || "video/mp4");
+    }
+    if (!isAllowed(file)) {
+      throw new Error(`Tipo de archivo no permitido: ${file.name}`);
+    }
+    const compressed = await compressToWebp(file);
+    const finalPath = storagePath.replace(/\.[^.]+$/, ".webp");
+    const mime = compressed.type.startsWith("image/heic") || compressed.type.startsWith("image/heif")
+      ? compressed.type
+      : "image/webp";
+    return uploadFile(finalPath, compressed, mime);
+  }
 
   const removeMedia = (id: string) => {
     setMediaFiles((prev) => {
@@ -290,16 +313,12 @@ export default function NuevoSenderoPage() {
             setSubmitError(null);
 
             try {
-              // Preparar datos para el backend
               const trailData: any = {
                 difficulty: formData.difficulty,
                 route_type: formData.route_type,
               };
 
-              // Nombre (obligatorio desde la UI)
               if (formData.name) trailData.name = formData.name;
-
-              // Agregar campos opcionales si tienen valor
               if (formData.description) trailData.description = formData.description;
               if (formData.region) trailData.region = formData.region;
               if (formData.distance_km) trailData.distance_km = parseFloat(formData.distance_km);
@@ -310,7 +329,6 @@ export default function NuevoSenderoPage() {
               if (formData.duration_minutes) trailData.duration_minutes = parseInt(formData.duration_minutes);
               if (formData.is_featured) trailData.is_featured = formData.is_featured;
               if (formData.is_premium) trailData.is_premium = formData.is_premium;
-              // Estado es obligatorio
               if (!formData.status_id) {
                 setSubmitError("El campo Estado es obligatorio");
                 setIsSubmitting(false);
@@ -319,34 +337,23 @@ export default function NuevoSenderoPage() {
               trailData.status_id = parseInt(formData.status_id);
               if (formData.slug) trailData.slug = formData.slug;
 
-              // Agregar map_point si existe (mapPoint viene como [lat, lng] desde Leaflet)
               if (mapPoint) {
                 trailData.map_point = {
-                  latitude: mapPoint[0],  // lat es el primer elemento
-                  longitude: mapPoint[1], // lng es el segundo elemento
+                  latitude: mapPoint[0],
+                  longitude: mapPoint[1],
                 };
               }
 
-              // Crear el sendero
+              // 1. Crear el sendero
               const response = await api.createTrail(trailData);
               const trailId = response.trail.id;
 
-              // Crear ruta y segmentos si existen
+              // 2. Crear ruta y segmentos
               if (routeSegments.length > 0) {
                 try {
-                  // Crear la ruta
-                  const routeResponse = await api.createTrailRoute(trailId, {
-                    is_active: true,
-                  });
+                  const routeResponse = await api.createTrailRoute(trailId, { is_active: true });
                   const routeId = routeResponse.route.id;
-
-                  // Convertir routeSegments de [lat, lng] a [lon, lat] para el backend (ahora JSON)
-                  const path = routeSegments.map((segment) => [
-                    segment[1], // longitude (lng)
-                    segment[0], // latitude (lat)
-                  ]);
-
-                  // Crear el segmento de ruta
+                  const path = routeSegments.map((segment) => [segment[1], segment[0]]);
                   await api.createRouteSegment(trailId, routeId, {
                     path,
                     segment_order: 1,
@@ -354,36 +361,74 @@ export default function NuevoSenderoPage() {
                   });
                 } catch (err: any) {
                   console.error("Error creating route/segments:", err);
-                  // Continuar aunque falle la creación de la ruta
                 }
               }
 
-              // Crear puntos de interés si existen
-              if (pointsOfInterest.length > 0) {
-                try {
-                  for (const point of pointsOfInterest) {
-                    if (point.location) {
-                      await api.createTrailPoint(trailId, {
-                        name: point.name || undefined,
-                        description: point.description || undefined,
-                        type: point.type || undefined,
-                        location: {
-                          longitude: point.location[1], // lng
-                          latitude: point.location[0],  // lat
-                          elevation: 0, // default
-                        },
-                        km_marker: point.km_marker ? parseFloat(point.km_marker) : undefined,
-                        order_index: point.order,
-                      });
-                    }
+              // 3. Subir media del sendero a Supabase → registrar URLs
+              if (mediaFiles.length > 0) {
+                for (let i = 0; i < mediaFiles.length; i++) {
+                  const media = mediaFiles[i];
+                  try {
+                    const ts = Date.now();
+                    const baseName = media.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const storagePath = `${trailId}/${ts}-${baseName}`;
+                    const url = await prepareAndUpload(media.file, storagePath);
+                    await api.createTrailMedia(trailId, {
+                      media_type: media.type,
+                      url,
+                      order_index: i,
+                    });
+                  } catch (err: any) {
+                    console.error(`Error subiendo media del sendero [${i}]:`, err);
                   }
-                } catch (err: any) {
-                  console.error("Error creating trail points:", err);
-                  // Continuar aunque falle la creación de puntos
                 }
               }
-              
-              // Redirigir a la lista de senderos después de crear
+
+              // 4. Crear puntos de interés y subir sus fotos
+              if (pointsOfInterest.length > 0) {
+                for (const point of pointsOfInterest) {
+                  if (!point.location) continue;
+                  try {
+                    const pointResponse = await api.createTrailPoint(trailId, {
+                      name: point.name || undefined,
+                      description: point.description || undefined,
+                      type: point.type || undefined,
+                      location: {
+                        longitude: point.location[1],
+                        latitude: point.location[0],
+                        elevation: 0,
+                      },
+                      km_marker: point.km_marker ? parseFloat(point.km_marker) : undefined,
+                      order_index: point.order,
+                    });
+
+                    const pointId = pointResponse.point.id;
+
+                    // Subir fotos/videos del punto
+                    if (point.photos.length > 0) {
+                      for (let j = 0; j < point.photos.length; j++) {
+                        const photo = point.photos[j];
+                        try {
+                          const ts = Date.now();
+                          const baseName = photo.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                          const storagePath = `${trailId}/points/${pointId}/${ts}-${baseName}`;
+                          const url = await prepareAndUpload(photo.file, storagePath);
+                          await api.createTrailPointMedia(trailId, pointId, {
+                            media_type: photo.type,
+                            url,
+                            order_index: j,
+                          });
+                        } catch (err: any) {
+                          console.error(`Error subiendo foto del punto [${j}]:`, err);
+                        }
+                      }
+                    }
+                  } catch (err: any) {
+                    console.error("Error creating trail point:", err);
+                  }
+                }
+              }
+
               router.push("/senderos");
             } catch (err: any) {
               setSubmitError(err.message || "Error al crear el sendero");

@@ -30,6 +30,9 @@ const statusLabels: Record<number, string> = {
   3: "Borrador",
 };
 
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='60' viewBox='0 0 80 60'%3E%3Crect fill='%23e5e7eb' width='80' height='60'/%3E%3Cpath fill='%239ca3af' d='M0 60h80v-20l-15 15-10-25-15 10-20-30L0 60z'/%3E%3C/svg%3E";
+
 interface Trail {
   id: string;
   slug: string;
@@ -41,6 +44,8 @@ interface Trail {
   duration_minutes?: number;
   status_id?: number;
   created_at: string;
+  thumbnail_url?: string | null;
+  image_urls?: string[];
 }
 
 export default function SenderosPage() {
@@ -166,7 +171,7 @@ export default function SenderosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#F0F0F0]">
-                  {["Sendero", "Dificultad", "Duración", "Distancia", "Estado", "Acciones"].map((h) => (
+                  {["Imagen", "Sendero", "Dificultad", "Duración", "Distancia", "Estado", "Acciones"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                       {h}
                     </th>
@@ -176,6 +181,9 @@ export default function SenderosPage() {
               <tbody className="divide-y divide-[#F5F5F5]">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
+                    <td className="px-4 py-3">
+                      <div className="h-12 w-16 rounded-lg bg-gray-100" />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="h-4 w-40 rounded bg-gray-100" />
                     </td>
@@ -208,6 +216,9 @@ export default function SenderosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#F0F0F0]">
+                  <th className="w-16 px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Imagen
+                  </th>
                   <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                     Sendero
                   </th>
@@ -229,11 +240,28 @@ export default function SenderosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F5F5F5]">
-                {filteredTrails.map((trail) => (
+                {filteredTrails.map((trail) => {
+                  const thumbUrl =
+                    trail.thumbnail_url ||
+                    trail.image_urls?.[0] ||
+                    PLACEHOLDER_IMAGE;
+                  return (
                   <tr
                     key={trail.id}
                     className="transition-colors hover:bg-gray-50/50"
                   >
+                    <td className="px-4 py-3">
+                      <div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">
+                        <img
+                          src={thumbUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = PLACEHOLDER_IMAGE;
+                          }}
+                        />
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-800">
                         {trail.name || trail.region || trail.slug || "Sin nombre"}
@@ -285,7 +313,8 @@ export default function SenderosPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

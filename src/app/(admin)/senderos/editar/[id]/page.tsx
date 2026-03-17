@@ -6,6 +6,8 @@ import { useRouter, useParams } from "next/navigation";
 import PageHeader from "@/components/admin/page-header";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
+import { uploadFile } from "@/lib/supabaseClient";
+import { compressToWebp, isAllowed } from "@/lib/image";
 
 // Componente de mapa dinámico para evitar problemas de SSR
 const UnifiedMapComponent = dynamic(() => import("../../nuevo/UnifiedMapComponent"), { ssr: false });
@@ -15,9 +17,11 @@ type MediaType = "image" | "photo_360" | "photo_180" | "video";
 
 interface MediaFile {
   id: string;
-  file: File;
+  file?: File;           // Solo para archivos nuevos
+  url?: string;          // URL del backend (existentes)
+  mediaId?: string;      // ID en trail_media (existentes)
   type: MediaType;
-  preview?: string;
+  preview?: string;      // objectURL o url
   order: number;
 }
 
@@ -81,6 +85,8 @@ export default function EditarSenderoPage() {
   const [isDrawingRoute, setIsDrawingRoute] = useState(false);
   const [isErasing, setIsErasing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<string[]>([]);
+  const [pointMediaToDelete, setPointMediaToDelete] = useState<{ pointId: string; mediaId: string }[]>([]);
 
   // Cargar datos del sendero
   useEffect(() => {
@@ -162,14 +168,27 @@ export default function EditarSenderoPage() {
           }
         }
 
+        // Cargar media del sendero
+        if (trail.media && Array.isArray(trail.media)) {
+          const loadedMedia: MediaFile[] = trail.media.map((m: any, i: number) => ({
+            id: m.id || `media-${i}`,
+            mediaId: m.id,
+            url: m.url,
+            type: (m.media_type as MediaType) || "image",
+            preview: m.url,
+            order: m.order_index ?? i,
+          }));
+          setMediaFiles(loadedMedia);
+        } else {
+          setMediaFiles([]);
+        }
+
         // Forzar reinicialización del mapa después de cargar los datos
-        // Usar setTimeout para asegurar que el mapPoint se haya actualizado primero
         setTimeout(() => {
           setMapKey(prev => prev + 1);
         }, 100);
 
         // Cargar puntos de interés si existen
-        console.log("Trail points from backend:", trail.points);
         if (trail.points && Array.isArray(trail.points) && trail.points.length > 0) {
           const loadedPoints: PointOfInterest[] = trail.points.map((point: any, index: number) => {
             let location: [number, number] | null = null;
@@ -192,7 +211,14 @@ export default function EditarSenderoPage() {
                 }
               }
             }
-            console.log(`Point ${index}:`, point, "Location:", location);
+            const photos: MediaFile[] = (point.media || []).map((m: any, j: number) => ({
+              id: m.id || `photo-${j}`,
+              mediaId: m.id,
+              url: m.url,
+              type: (m.media_type as MediaType) || "image",
+              preview: m.url,
+              order: m.order_index ?? j,
+            }));
             return {
               id: point.id || `point-${Date.now()}-${index}`,
               name: point.name || "",
@@ -201,10 +227,9 @@ export default function EditarSenderoPage() {
               location,
               km_marker: point.km_marker?.toString() || "",
               order: point.order_index !== undefined ? point.order_index : index,
-              photos: [],
+              photos,
             };
           });
-          console.log("Loaded points:", loadedPoints);
           setPointsOfInterest(loadedPoints);
         } else {
           console.log("No points found or empty array");
@@ -224,7 +249,7 @@ export default function EditarSenderoPage() {
   }, [trailId]);
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value, type } = e.target;
     setFormData((prev) => {
@@ -250,10 +275,10 @@ export default function EditarSenderoPage() {
     const newMedia: MediaFile[] = files.map((file, index) => {
       const mediaType = determineMediaType(file);
       return {
-        id: `${Date.now()}-${index}`,
+        id: `new-${Date.now()}-${index}`,
         file,
         type: mediaType,
-        preview: mediaType === "video" ? undefined : URL.createObjectURL(file),
+        preview: URL.createObjectURL(file),
         order: mediaFiles.length + index,
       };
     });
@@ -261,25 +286,41 @@ export default function EditarSenderoPage() {
   };
 
   const determineMediaType = (file: File): MediaType => {
+    if (file.type.startsWith("video/")) return "video";
     return "image";
   };
 
-  const removeMedia = (id: string) => {
-    setMediaFiles((prev) => {
-      const item = prev.find((m) => m.id === id);
-      if (item?.preview) {
-        URL.revokeObjectURL(item.preview);
-      }
-      return prev.filter((m) => m.id !== id);
-    });
-    if (selectedMediaIndex !== null) {
-      const index = mediaFiles.findIndex((m) => m.id === id);
-      if (index === selectedMediaIndex) {
-        setSelectedMediaIndex(null);
-      } else if (index < selectedMediaIndex) {
-        setSelectedMediaIndex(selectedMediaIndex - 1);
-      }
+  async function prepareAndUpload(file: File, storagePath: string): Promise<string> {
+    if (file.type.startsWith("video/")) {
+      const ext = file.name.split(".").pop() || "mp4";
+      const videoPath = storagePath.replace(/\.[^.]+$/, `.${ext}`);
+      return uploadFile(videoPath, file, file.type || "video/mp4");
     }
+    if (!isAllowed(file)) {
+      throw new Error(`Tipo de archivo no permitido: ${file.name}`);
+    }
+    const compressed = await compressToWebp(file);
+    const finalPath = storagePath.replace(/\.[^.]+$/, ".webp");
+    const mime =
+      compressed.type.startsWith("image/heic") || compressed.type.startsWith("image/heif")
+        ? compressed.type
+        : "image/webp";
+    return uploadFile(finalPath, compressed, mime);
+  }
+
+  const removeMedia = (id: string) => {
+    const item = mediaFiles.find((m) => m.id === id);
+    const index = mediaFiles.findIndex((m) => m.id === id);
+    if (item?.mediaId) {
+      setMediaToDelete((prev) => [...prev, item.mediaId!]);
+    }
+    if (item?.file && item?.preview?.startsWith("blob:")) {
+      URL.revokeObjectURL(item.preview);
+    }
+    setMediaFiles((prev) => prev.filter((m) => m.id !== id));
+    setSelectedMediaIndex((prev) =>
+      prev === null ? null : index === prev ? null : index < prev ? prev - 1 : prev
+    );
   };
 
   const updateMediaType = (id: string, type: MediaType) => {
@@ -351,10 +392,10 @@ export default function EditarSenderoPage() {
     const newPhotos: MediaFile[] = files.map((file, index) => {
       const mediaType = determineMediaType(file);
       return {
-        id: `${Date.now()}-${index}`,
+        id: `new-${Date.now()}-${index}`,
         file,
         type: mediaType,
-        preview: mediaType === "video" ? undefined : URL.createObjectURL(file),
+        preview: URL.createObjectURL(file),
         order: 0,
       };
     });
@@ -374,35 +415,33 @@ export default function EditarSenderoPage() {
   };
 
   const removePointPhoto = (pointId: string, photoId: string) => {
+    const point = pointsOfInterest.find((p) => p.id === pointId);
+    const photo = point?.photos.find((p) => p.id === photoId);
+    if (photo?.mediaId) {
+      setPointMediaToDelete((prev) => [...prev, { pointId, mediaId: photo.mediaId! }]);
+    }
+    if (photo?.file && photo?.preview?.startsWith("blob:")) {
+      URL.revokeObjectURL(photo.preview);
+    }
     setPointsOfInterest((prev) =>
-      prev.map((point) => {
-        if (point.id === pointId) {
-          const photo = point.photos.find((p) => p.id === photoId);
-          if (photo?.preview) {
-            URL.revokeObjectURL(photo.preview);
-          }
-          return {
-            ...point,
-            photos: point.photos.filter((p) => p.id !== photoId),
-          };
-        }
-        return point;
-      })
+      prev.map((p) =>
+        p.id === pointId ? { ...p, photos: p.photos.filter((ph) => ph.id !== photoId) } : p
+      )
     );
   };
 
+  const mediaFilesRef = useRef(mediaFiles);
+  const pointsRef = useRef(pointsOfInterest);
+  mediaFilesRef.current = mediaFiles;
+  pointsRef.current = pointsOfInterest;
   useEffect(() => {
     return () => {
-      mediaFiles.forEach((m) => {
-        if (m.preview) {
-          URL.revokeObjectURL(m.preview);
-        }
+      mediaFilesRef.current.forEach((m) => {
+        if (m.preview?.startsWith("blob:")) URL.revokeObjectURL(m.preview);
       });
-      pointsOfInterest.forEach((point) => {
+      pointsRef.current.forEach((point) => {
         point.photos.forEach((photo) => {
-          if (photo.preview) {
-            URL.revokeObjectURL(photo.preview);
-          }
+          if (photo.preview?.startsWith("blob:")) URL.revokeObjectURL(photo.preview);
         });
       });
     };
@@ -419,8 +458,50 @@ export default function EditarSenderoPage() {
             ← Volver
           </Link>
         </PageHeader>
-        <div className="flex items-center justify-center p-12">
-          <p className="text-sm text-gray-500">Cargando sendero...</p>
+        <div className="p-8 animate-pulse space-y-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+              <div className="mb-4 h-3 w-24 rounded bg-gray-200" />
+              <div className="space-y-4">
+                <div className="h-10 rounded-lg bg-gray-200" />
+                <div className="h-24 rounded-lg bg-gray-200" />
+                <div className="h-10 rounded-lg bg-gray-200" />
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+              <div className="mb-4 h-3 w-32 rounded bg-gray-200" />
+              <div className="space-y-4">
+                <div className="h-10 rounded-lg bg-gray-200" />
+                <div className="h-10 rounded-lg bg-gray-200" />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+                <div className="mb-4 h-3 w-28 rounded bg-gray-200" />
+                <div className="space-y-4">
+                  <div className="h-10 rounded-lg bg-gray-200" />
+                  <div className="h-10 rounded-lg bg-gray-200" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <div className="mb-4 h-3 w-36 rounded bg-gray-200" />
+            <div className="h-[400px] rounded-lg bg-gray-200" />
+          </div>
+          <div className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <div className="mb-4 h-3 w-40 rounded bg-gray-200" />
+            <div className="space-y-4">
+              <div className="h-20 rounded-lg bg-gray-200" />
+              <div className="h-20 rounded-lg bg-gray-200" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 border-t border-[#EBEBEB] pt-6">
+            <div className="h-10 w-24 rounded-lg bg-gray-200" />
+            <div className="h-10 w-32 rounded-lg bg-gray-200" />
+          </div>
         </div>
       </div>
     );
@@ -486,8 +567,95 @@ export default function EditarSenderoPage() {
 
               // Actualizar el sendero
               await api.updateTrail(trailId, trailData);
-              
-              // Redirigir a la lista de senderos después de actualizar
+
+              // Aplicar eliminaciones de media del sendero
+              for (const mediaId of mediaToDelete) {
+                try {
+                  await api.deleteTrailMedia(trailId, mediaId);
+                } catch (err: any) {
+                  console.error("Error eliminando media:", err);
+                }
+              }
+
+              // Aplicar eliminaciones de media de puntos
+              for (const { pointId, mediaId } of pointMediaToDelete) {
+                try {
+                  await api.deleteTrailPointMedia(trailId, pointId, mediaId);
+                } catch (err: any) {
+                  console.error("Error eliminando foto del punto:", err);
+                }
+              }
+
+              // Subir solo los archivos nuevos del sendero (los existentes ya están en el backend)
+              const newTrailMedia = mediaFiles.filter((m) => m.file);
+              for (let i = 0; i < newTrailMedia.length; i++) {
+                const media = newTrailMedia[i];
+                if (!media.file) continue;
+                try {
+                  const ts = Date.now();
+                  const baseName = media.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                  const storagePath = `${trailId}/${ts}-${baseName}`;
+                  const url = await prepareAndUpload(media.file, storagePath);
+                  await api.createTrailMedia(trailId, {
+                    media_type: media.type,
+                    url,
+                    order_index: mediaFiles.indexOf(media),
+                  });
+                } catch (err: any) {
+                  console.error(`Error subiendo media del sendero [${i}]:`, err);
+                }
+              }
+
+              // Crear/actualizar puntos de interés con sus fotos
+              for (const point of pointsOfInterest) {
+                if (!point.location) continue;
+
+                // Si el ID parece un UUID real (del backend), intentar agregar fotos nuevas
+                const isBackendId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(point.id);
+                let pointId = point.id;
+
+                if (!isBackendId) {
+                  // Punto nuevo: crear primero
+                  try {
+                    const pointResponse = await api.createTrailPoint(trailId, {
+                      name: point.name || undefined,
+                      description: point.description || undefined,
+                      type: point.type || undefined,
+                      location: {
+                        longitude: point.location[1],
+                        latitude: point.location[0],
+                        elevation: 0,
+                      },
+                      km_marker: point.km_marker ? parseFloat(point.km_marker) : undefined,
+                      order_index: point.order,
+                    });
+                    pointId = pointResponse.point.id;
+                  } catch (err: any) {
+                    console.error("Error creating new point:", err);
+                    continue;
+                  }
+                }
+
+                // Subir fotos/videos del punto (solo los que tienen File adjunto)
+                for (let j = 0; j < point.photos.length; j++) {
+                  const photo = point.photos[j];
+                  if (!photo.file) continue;
+                  try {
+                    const ts = Date.now();
+                    const baseName = photo.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const storagePath = `${trailId}/points/${pointId}/${ts}-${baseName}`;
+                    const url = await prepareAndUpload(photo.file, storagePath);
+                    await api.createTrailPointMedia(trailId, pointId, {
+                      media_type: photo.type,
+                      url,
+                      order_index: j,
+                    });
+                  } catch (err: any) {
+                    console.error(`Error subiendo foto del punto [${j}]:`, err);
+                  }
+                }
+              }
+
               router.push("/senderos");
             } catch (err: any) {
               setSubmitError(err.message || "Error al actualizar el sendero");
@@ -947,10 +1115,213 @@ export default function EditarSenderoPage() {
                         </p>
                       )}
                     </div>
+
+                    {/* Fotos del punto */}
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-700">
+                          Fotos del Punto
+                        </label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,video/*"
+                          onChange={(e) => handlePointPhotoUpload(e, point.id)}
+                          className="hidden"
+                          id={`point-photo-input-${point.id}`}
+                        />
+                        <label
+                          htmlFor={`point-photo-input-${point.id}`}
+                          className="cursor-pointer rounded-lg border border-[#EBEBEB] bg-white px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                        >
+                          + Agregar Fotos/Videos
+                        </label>
+                      </div>
+                      {point.photos.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {point.photos.map((photo) => (
+                            <div
+                              key={photo.id}
+                              className="group relative aspect-square rounded-lg border border-[#EBEBEB] overflow-hidden bg-gray-100"
+                            >
+                              {photo.type === "video" ? (
+                                <video
+                                  src={photo.preview || photo.url || ""}
+                                  className="h-full w-full object-cover"
+                                  controls
+                                />
+                              ) : (
+                                <img
+                                  src={photo.preview || photo.url || ""}
+                                  alt={`Foto ${photo.id}`}
+                                  className="h-full w-full object-cover"
+                                />
+                              )}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                <div className="flex gap-2">
+                                  {photo.type === "photo_360" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedPointPhoto({ pointId: point.id, photoId: photo.id })
+                                      }
+                                      className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-white"
+                                    >
+                                      Ver 360°
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => removePointPhoto(point.id, photo.id)}
+                                    className="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="absolute top-2 left-2">
+                                <select
+                                  value={photo.type}
+                                  onChange={(e) => {
+                                    setPointsOfInterest((prev) =>
+                                      prev.map((p) =>
+                                        p.id === point.id
+                                          ? {
+                                              ...p,
+                                              photos: p.photos.map((ph) =>
+                                                ph.id === photo.id
+                                                  ? { ...ph, type: e.target.value as MediaType }
+                                                  : ph
+                                              ),
+                                            }
+                                          : p
+                                      )
+                                    );
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-gray-700 outline-none"
+                                >
+                                  <option value="image">Imagen</option>
+                                  <option value="photo_360">Foto 360°</option>
+                                  <option value="photo_180">Foto 180°</option>
+                                  <option value="video">Video</option>
+                                </select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+          </section>
+
+          {/* Fotos y Videos del Sendero */}
+          <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Fotos y Videos
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg border-2 border-dashed border-[#EBEBEB] bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:border-[#3FA9F5] hover:bg-gray-100"
+                >
+                  + Agregar fotos/videos
+                </button>
+              </div>
+
+              {mediaFiles.length > 0 && (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  {mediaFiles.map((media, index) => (
+                    <div
+                      key={media.id}
+                      className="group relative aspect-square rounded-lg border border-[#EBEBEB] overflow-hidden bg-gray-100"
+                    >
+                      {media.type === "video" ? (
+                        <video
+                          src={media.preview || media.url || ""}
+                          className="h-full w-full object-cover"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={media.preview || media.url || ""}
+                          alt={`Preview ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <div className="flex gap-2">
+                          {media.type === "photo_360" && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMediaIndex(index)}
+                              className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-white"
+                            >
+                              Ver 360°
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeMedia(media.id)}
+                            className="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="absolute top-2 left-2">
+                        <select
+                          value={media.type}
+                          onChange={(e) =>
+                            updateMediaType(media.id, e.target.value as MediaType)
+                          }
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded bg-white/90 px-2 py-1 text-xs font-medium text-gray-700 outline-none"
+                        >
+                          <option value="image">Imagen</option>
+                          <option value="photo_360">Foto 360°</option>
+                          <option value="photo_180">Foto 180°</option>
+                          <option value="video">Video</option>
+                        </select>
+                      </div>
+                      <div className="absolute top-2 right-2 flex flex-col gap-1">
+                        {index > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => updateMediaOrder(media.id, "up")}
+                            className="rounded bg-white/90 p-1 text-xs hover:bg-white"
+                          >
+                            ↑
+                          </button>
+                        )}
+                        {index < mediaFiles.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => updateMediaOrder(media.id, "down")}
+                            className="rounded bg-white/90 p-1 text-xs hover:bg-white"
+                          >
+                            ↓
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Configuración */}
@@ -1031,6 +1402,54 @@ export default function EditarSenderoPage() {
           </div>
         </form>
       </div>
+
+      {/* Modal para visualizar foto 360 de fotos generales */}
+      {selectedMediaIndex !== null &&
+        mediaFiles[selectedMediaIndex]?.type === "photo_360" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+            <div className="relative w-full max-w-6xl h-full max-h-[90vh]">
+              <button
+                onClick={() => setSelectedMediaIndex(null)}
+                className="absolute top-4 right-4 z-10 rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <PanoramaViewer
+                imageUrl={mediaFiles[selectedMediaIndex].preview || ""}
+                onClose={() => setSelectedMediaIndex(null)}
+              />
+            </div>
+          </div>
+        )}
+
+      {/* Modal para visualizar foto 360 de puntos de interés */}
+      {selectedPointPhoto && (() => {
+        const point = pointsOfInterest.find((p) => p.id === selectedPointPhoto.pointId);
+        const photo = point?.photos.find((p) => p.id === selectedPointPhoto.photoId);
+        if (photo && photo.type === "photo_360") {
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+              <div className="relative w-full max-w-6xl h-full max-h-[90vh]">
+                <button
+                  onClick={() => setSelectedPointPhoto(null)}
+                  className="absolute top-4 right-4 z-10 rounded-lg bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <PanoramaViewer
+                  imageUrl={photo.preview || ""}
+                  onClose={() => setSelectedPointPhoto(null)}
+                />
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }

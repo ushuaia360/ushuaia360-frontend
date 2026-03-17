@@ -107,6 +107,49 @@ export const api = {
     });
   },
 
+  // Trail Media
+  createTrailMedia: async (
+    trailId: string,
+    data: { media_type: string; url: string; thumbnail_url?: string; order_index?: number }
+  ) => {
+    return apiRequest<{ message: string; media: any }>(`/trails/${trailId}/media`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getTrailMedia: async (trailId: string) => {
+    return apiRequest<{ media: any[] }>(`/trails/${trailId}/media`);
+  },
+
+  deleteTrailMedia: async (trailId: string, mediaId: string) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Trail Point Media
+  createTrailPointMedia: async (
+    trailId: string,
+    pointId: string,
+    data: { media_type: string; url: string; thumbnail_url?: string; order_index?: number }
+  ) => {
+    return apiRequest<{ message: string; media: any }>(
+      `/trails/${trailId}/points/${pointId}/media`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  getTrailPointMedia: async (trailId: string, pointId: string) => {
+    return apiRequest<{ media: any[] }>(`/trails/${trailId}/points/${pointId}/media`);
+  },
+
+  deleteTrailPointMedia: async (trailId: string, pointId: string, mediaId: string) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/points/${pointId}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Users
   getUsers: async () => {
     return apiRequest<{ users: any[] }>('/users');

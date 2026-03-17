@@ -302,7 +302,7 @@ export default function UnifiedMapComponent({
       // Prioridad: dibujar ruta > punto de interés seleccionado > punto principal
       if (isDrawingRoute) {
         // Agregar punto a la ruta [lat, lng]
-        const newSegments = [...routeSegments, [lat, lng]];
+        const newSegments: [number, number][] = [...routeSegments, [lat, lng] as [number, number]];
         onRouteSegmentsChange(newSegments);
       } else if (selectedPointId) {
         // Actualizar ubicación del punto de interés seleccionado [lat, lng]

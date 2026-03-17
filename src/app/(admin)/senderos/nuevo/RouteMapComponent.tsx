@@ -115,7 +115,7 @@ export default function RouteMapComponent({
         newMap.on("click", (e: any) => {
           if (isDrawing) {
             const { lat, lng } = e.latlng;
-            const newSegments = [...segments, [lat, lng]];
+            const newSegments: [number, number][] = [...segments, [lat, lng] as [number, number]];
             onSegmentsChange(newSegments);
           }
         });
