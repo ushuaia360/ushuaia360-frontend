@@ -99,11 +99,30 @@ export const api = {
     });
   },
 
+  deleteAllRouteSegments: async (trailId: string, routeId: string) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/routes/${routeId}/segments`, {
+      method: 'DELETE',
+    });
+  },
+
   // Trail Points
   createTrailPoint: async (trailId: string, data: any) => {
     return apiRequest<{ message: string; point: any }>(`/trails/${trailId}/points`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  updateTrailPoint: async (trailId: string, pointId: string, data: any) => {
+    return apiRequest<{ message: string; point: any }>(`/trails/${trailId}/points/${pointId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteTrailPoint: async (trailId: string, pointId: string) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/points/${pointId}`, {
+      method: 'DELETE',
     });
   },
 

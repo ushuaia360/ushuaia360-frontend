@@ -76,6 +76,8 @@ export default function EditarSenderoPage() {
 
   const [mapPoint, setMapPoint] = useState<[number, number] | null>(null);
   const [routeSegments, setRouteSegments] = useState<[number, number][]>([]);
+  /** Ruta activa del trail (GET trail → route); usada para reemplazar segmentos al guardar */
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
   const [mapKey, setMapKey] = useState(0); // Key para forzar reinicialización del mapa
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
@@ -87,6 +89,11 @@ export default function EditarSenderoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mediaToDelete, setMediaToDelete] = useState<string[]>([]);
   const [pointMediaToDelete, setPointMediaToDelete] = useState<{ pointId: string; mediaId: string }[]>([]);
+  /** IDs de puntos que ya existían en el backend y el usuario eliminó en el formulario */
+  const [trailPointsRemovedIds, setTrailPointsRemovedIds] = useState<string[]>([]);
+
+  const isBackendPointId = (id: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
   // Cargar datos del sendero
   useEffect(() => {
@@ -147,24 +154,47 @@ export default function EditarSenderoPage() {
           console.log("No map_point found in trail");
         }
 
-        // Cargar segmentos de ruta si existen
+        if (trail.route?.id) {
+          setActiveRouteId(trail.route.id);
+        } else {
+          setActiveRouteId(null);
+        }
+
+        // Cargar todos los segmentos ordenados (misma unión que la app móvil / GET trail)
         if (trail.route_segments && Array.isArray(trail.route_segments) && trail.route_segments.length > 0) {
-          // Tomar el primer segmento (puede haber múltiples segmentos)
-          const firstSegment = trail.route_segments[0];
-          if (firstSegment.path && Array.isArray(firstSegment.path) && firstSegment.path.length > 0) {
-            // El path ya viene como [lat, lng] desde el backend
-            // Validar que todos los puntos sean válidos
-            const validSegments = firstSegment.path.filter(
-              (seg: any) => Array.isArray(seg) && seg.length >= 2 && 
-                           typeof seg[0] === 'number' && typeof seg[1] === 'number' &&
-                           !isNaN(seg[0]) && !isNaN(seg[1])
-            );
-            if (validSegments.length > 0) {
-              setRouteSegments(validSegments);
-              console.log("Loaded route segments:", validSegments);
+          const ordered = [...trail.route_segments].sort(
+            (a: any, b: any) => (a.segment_order ?? 0) - (b.segment_order ?? 0),
+          );
+          const merged: [number, number][] = [];
+          for (const seg of ordered) {
+            if (!seg.path || !Array.isArray(seg.path) || seg.path.length === 0) continue;
+            const valid = seg.path.filter(
+              (pair: any) =>
+                Array.isArray(pair) &&
+                pair.length >= 2 &&
+                typeof pair[0] === "number" &&
+                typeof pair[1] === "number" &&
+                !isNaN(pair[0]) &&
+                !isNaN(pair[1]),
+            ) as [number, number][];
+            if (valid.length === 0) continue;
+            if (merged.length === 0) {
+              merged.push(...valid);
             } else {
-              console.warn("No valid route segments found");
+              const last = merged[merged.length - 1];
+              const first = valid[0];
+              if (last[0] === first[0] && last[1] === first[1]) {
+                merged.push(...valid.slice(1));
+              } else {
+                merged.push(...valid);
+              }
             }
+          }
+          if (merged.length > 0) {
+            setRouteSegments(merged);
+            console.log("Loaded route segments (merged):", merged.length, "points");
+          } else {
+            console.warn("No valid route segments found");
           }
         }
 
@@ -378,6 +408,9 @@ export default function EditarSenderoPage() {
         }
       });
     }
+    if (isBackendPointId(id)) {
+      setTrailPointsRemovedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    }
     setPointsOfInterest((prev) => prev.filter((p) => p.id !== id));
     if (selectedPointId === id) {
       setSelectedPointId(null);
@@ -568,6 +601,33 @@ export default function EditarSenderoPage() {
               // Actualizar el sendero
               await api.updateTrail(trailId, trailData);
 
+              // Persistir trazado (igual que en "nuevo": path [lng, lat] por punto)
+              try {
+                if (routeSegments.length >= 2) {
+                  let routeId = activeRouteId;
+                  if (!routeId) {
+                    const routeResponse = await api.createTrailRoute(trailId, { is_active: true });
+                    routeId = routeResponse.route.id;
+                    setActiveRouteId(routeId);
+                  } else {
+                    await api.deleteAllRouteSegments(trailId, routeId);
+                  }
+                  const path = routeSegments.map((segment) => [segment[1], segment[0]]);
+                  await api.createRouteSegment(trailId, routeId, {
+                    path,
+                    segment_order: 1,
+                    distance_km: formData.distance_km ? parseFloat(formData.distance_km) : undefined,
+                  });
+                } else if (activeRouteId) {
+                  await api.deleteAllRouteSegments(trailId, activeRouteId);
+                }
+              } catch (err: any) {
+                console.error("Error guardando ruta/segmentos:", err);
+                setSubmitError(err?.message || "Error al guardar el trazado del sendero");
+                setIsSubmitting(false);
+                return;
+              }
+
               // Aplicar eliminaciones de media del sendero
               for (const mediaId of mediaToDelete) {
                 try {
@@ -577,12 +637,21 @@ export default function EditarSenderoPage() {
                 }
               }
 
-              // Aplicar eliminaciones de media de puntos
+              // Aplicar eliminaciones de media de puntos (omitir si el punto entero se va a borrar)
               for (const { pointId, mediaId } of pointMediaToDelete) {
+                if (trailPointsRemovedIds.includes(pointId)) continue;
                 try {
                   await api.deleteTrailPointMedia(trailId, pointId, mediaId);
                 } catch (err: any) {
                   console.error("Error eliminando foto del punto:", err);
+                }
+              }
+
+              for (const removedPointId of trailPointsRemovedIds) {
+                try {
+                  await api.deleteTrailPoint(trailId, removedPointId);
+                } catch (err: any) {
+                  console.error("Error eliminando punto de interés:", err);
                 }
               }
 
@@ -610,12 +679,32 @@ export default function EditarSenderoPage() {
               for (const point of pointsOfInterest) {
                 if (!point.location) continue;
 
-                // Si el ID parece un UUID real (del backend), intentar agregar fotos nuevas
-                const isBackendId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(point.id);
+                const isBackendId = isBackendPointId(point.id);
                 let pointId = point.id;
 
-                if (!isBackendId) {
-                  // Punto nuevo: crear primero
+                if (isBackendId) {
+                  const kmRaw = String(point.km_marker ?? "").trim();
+                  const kmParsed = kmRaw === "" ? null : parseFloat(kmRaw);
+                  try {
+                    await api.updateTrailPoint(trailId, point.id, {
+                      name: point.name ?? "",
+                      description: point.description ?? "",
+                      type: point.type,
+                      location: {
+                        longitude: point.location[1],
+                        latitude: point.location[0],
+                        elevation: 0,
+                      },
+                      km_marker: kmParsed !== null && Number.isFinite(kmParsed) ? kmParsed : null,
+                      order_index: point.order,
+                    });
+                  } catch (err: any) {
+                    console.error("Error actualizando punto de interés:", err);
+                    setSubmitError(err?.message || "Error al actualizar un punto de interés");
+                    setIsSubmitting(false);
+                    return;
+                  }
+                } else {
                   try {
                     const pointResponse = await api.createTrailPoint(trailId, {
                       name: point.name || undefined,
