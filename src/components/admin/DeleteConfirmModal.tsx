@@ -7,6 +7,8 @@ interface DeleteConfirmModalProps {
   title?: string;
   message?: string;
   itemName?: string;
+  /** Classes for the highlighted item line (e.g. review quote vs. trail name). */
+  itemNameClassName?: string;
 }
 
 export default function DeleteConfirmModal({
@@ -16,6 +18,7 @@ export default function DeleteConfirmModal({
   title = "Confirmar eliminación",
   message = "¿Estás seguro de que deseas eliminar este elemento?",
   itemName,
+  itemNameClassName,
 }: DeleteConfirmModalProps) {
   if (!isOpen) return null;
 
@@ -29,7 +32,14 @@ export default function DeleteConfirmModal({
           </p>
           {itemName && (
             <p className="mb-4 text-sm font-medium text-gray-800">
-              <span className="text-red-600">{itemName}</span>
+              <span
+                className={
+                  itemNameClassName ??
+                  "text-sm font-medium text-red-600 font-sans"
+                }
+              >
+                {itemName}
+              </span>
             </p>
           )}
           <p className="text-xs text-red-600">

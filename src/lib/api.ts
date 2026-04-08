@@ -83,6 +83,45 @@ export const api = {
     });
   },
 
+  getTrailReviews: async (
+    trailId: string,
+    params?: { limit?: number; offset?: number }
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (params?.limit != null) queryParams.append('limit', params.limit.toString());
+    if (params?.offset != null) queryParams.append('offset', params.offset.toString());
+    const query = queryParams.toString();
+    return apiRequest<{
+      reviews: Array<{
+        id: string;
+        trail_id: string;
+        user_id: string | null;
+        name: string | null;
+        avatar_url: string | null;
+        rating: number;
+        comment: string | null;
+        created_at: string;
+      }>;
+      total: number;
+      average_rating: number;
+      rating_counts: {
+        one_star: number;
+        two_star: number;
+        three_star: number;
+        four_star: number;
+        five_star: number;
+      };
+      limit: number;
+      offset: number;
+    }>(`/trails/${trailId}/reviews${query ? `?${query}` : ''}`);
+  },
+
+  deleteTrailReview: async (trailId: string, reviewId: string) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/reviews/${reviewId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Trail Routes
   createTrailRoute: async (trailId: string, data: any) => {
     return apiRequest<{ message: string; route: any }>(`/trails/${trailId}/routes`, {

@@ -20,7 +20,7 @@ const nav = [
   { href: "/", label: "Home", icon: House },
   { href: "/usuarios", label: "Usuarios", icon: Users },
   { href: "/senderos", label: "Senderos", icon: MapPin },
-  // { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
+  { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
 ];
 
 interface User {
