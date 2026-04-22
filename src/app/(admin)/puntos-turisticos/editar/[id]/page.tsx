@@ -2,14 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { uploadTouristPlaceFile } from "@/lib/supabaseClient";
 import { compressToWebp, isAllowed } from "@/lib/image";
 
-const LocationPickerMap = dynamic(() => import("./LocationPickerMap"), {
+const LocationPickerMap = dynamic(() => import("../../nuevo/LocationPickerMap"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-gray-50 text-sm text-gray-400">
@@ -19,7 +19,7 @@ const LocationPickerMap = dynamic(() => import("./LocationPickerMap"), {
 });
 
 const PanoramaViewer = dynamic(
-  () => import("../../senderos/nuevo/PanoramaViewer"),
+  () => import("../../../senderos/nuevo/PanoramaViewer"),
   { ssr: false }
 );
 
@@ -27,7 +27,9 @@ type MediaType = "image" | "photo_360" | "photo_180" | "video";
 
 interface MediaFile {
   id: string;
-  file: File;
+  file?: File;
+  url?: string;
+  mediaId?: string;
   type: MediaType;
   preview?: string;
   order: number;
@@ -35,8 +37,12 @@ interface MediaFile {
 
 type Category = "categoria_1" | "categoria_2" | "categoria_3";
 
-export default function NuevoPuntoTuristicoPage() {
+export default function EditarPuntoTuristicoPage() {
   const router = useRouter();
+  const params = useParams();
+  const placeId = params.id as string;
+
+  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -49,6 +55,7 @@ export default function NuevoPuntoTuristicoPage() {
   const [mapPoint, setMapPoint] = useState<[number, number] | null>(null);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaFilesRef = useRef<MediaFile[]>([]);
   mediaFilesRef.current = mediaFiles;
@@ -61,6 +68,61 @@ export default function NuevoPuntoTuristicoPage() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
   };
+
+  useEffect(() => {
+    const load = async () => {
+      if (!placeId) return;
+      try {
+        setLoading(true);
+        setSubmitError(null);
+        const { place } = await api.getPlace(placeId);
+        setFormData({
+          name: place.name || "",
+          description: place.description || "",
+          category: (place.category as Category) || "",
+          region: place.region || "Tierra del Fuego",
+          country: place.country || "Argentina",
+        });
+        if (
+          place.latitude != null &&
+          place.longitude != null &&
+          typeof place.latitude === "number" &&
+          typeof place.longitude === "number"
+        ) {
+          setMapPoint([place.latitude, place.longitude]);
+        }
+        if (place.media && Array.isArray(place.media)) {
+          const loaded: MediaFile[] = place.media.map((m: any, i: number) => ({
+            id: m.id || `media-${i}`,
+            mediaId: m.id,
+            url: m.url,
+            type: (m.media_type as MediaType) || "image",
+            preview: m.url,
+            order: m.order_index ?? i,
+          }));
+          setMediaFiles(loaded);
+        } else {
+          setMediaFiles([]);
+        }
+      } catch (err: any) {
+        setSubmitError(err.message || "Error al cargar el punto turístico");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [placeId]);
+
+  useEffect(() => {
+    return () => {
+      mediaFilesRef.current.forEach((m) => {
+        if (m.preview?.startsWith("blob:")) {
+          URL.revokeObjectURL(m.preview);
+        }
+      });
+    };
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -79,7 +141,7 @@ export default function NuevoPuntoTuristicoPage() {
     const newMedia: MediaFile[] = files.map((file, index) => {
       const mediaType = determineMediaType(file);
       return {
-        id: `${Date.now()}-${index}`,
+        id: `new-${Date.now()}-${index}`,
         file,
         type: mediaType,
         preview: URL.createObjectURL(file),
@@ -109,21 +171,18 @@ export default function NuevoPuntoTuristicoPage() {
   }
 
   const removeMedia = (id: string) => {
-    setMediaFiles((prev) => {
-      const item = prev.find((m) => m.id === id);
-      if (item?.preview) {
-        URL.revokeObjectURL(item.preview);
-      }
-      return prev.filter((m) => m.id !== id);
-    });
-    if (selectedMediaIndex !== null) {
-      const index = mediaFiles.findIndex((m) => m.id === id);
-      if (index === selectedMediaIndex) {
-        setSelectedMediaIndex(null);
-      } else if (index < selectedMediaIndex) {
-        setSelectedMediaIndex(selectedMediaIndex - 1);
-      }
+    const item = mediaFiles.find((m) => m.id === id);
+    const index = mediaFiles.findIndex((m) => m.id === id);
+    if (item?.mediaId) {
+      setMediaToDelete((prev) => [...prev, item.mediaId!]);
     }
+    if (item?.preview?.startsWith("blob:")) {
+      URL.revokeObjectURL(item.preview);
+    }
+    setMediaFiles((prev) => prev.filter((m) => m.id !== id));
+    setSelectedMediaIndex((prev) =>
+      prev === null ? null : index === prev ? null : index < prev ? prev - 1 : prev
+    );
   };
 
   const updateMediaType = (id: string, type: MediaType) => {
@@ -142,19 +201,29 @@ export default function NuevoPuntoTuristicoPage() {
     });
   };
 
-  useEffect(() => {
-    return () => {
-      mediaFilesRef.current.forEach((m) => {
-        if (m.preview) {
-          URL.revokeObjectURL(m.preview);
-        }
-      });
-    };
-  }, []);
+  const mediaSrc = (m: MediaFile) => m.preview || m.url || "";
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Editar Punto Turístico">
+          <Link
+            href="/puntos-turisticos"
+            className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            ← Volver
+          </Link>
+        </PageHeader>
+        <div className="flex items-center justify-center p-16 text-sm text-gray-500">
+          Cargando...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader title="Nuevo Punto Turístico">
+      <PageHeader title="Editar Punto Turístico">
         <Link
           href="/puntos-turisticos"
           className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
@@ -193,53 +262,57 @@ export default function NuevoPuntoTuristicoPage() {
               }
 
               const slugFromName = generateSlug(formData.name.trim());
-              const response = await api.createPlace({
+              await api.updatePlace(placeId, {
                 name: formData.name.trim(),
-                description: formData.description || undefined,
+                description: formData.description,
                 slug: slugFromName || undefined,
                 category: formData.category as Category,
-                region: formData.region || undefined,
-                country: formData.country || undefined,
+                region: formData.region,
+                country: formData.country,
                 location: {
                   latitude: mapPoint[0],
                   longitude: mapPoint[1],
                 },
               });
 
-              const placeId = response.place.id;
+              for (const mediaId of mediaToDelete) {
+                try {
+                  await api.deletePlaceMedia(placeId, mediaId);
+                } catch (err: any) {
+                  console.error("Error eliminando media:", err);
+                }
+              }
 
-              if (mediaFiles.length > 0) {
-                for (let i = 0; i < mediaFiles.length; i++) {
-                  const media = mediaFiles[i];
-                  try {
-                    const ts = Date.now();
-                    const baseName = media.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-                    const storagePath = `${placeId}/${ts}-${baseName}`;
-                    const url = await prepareAndUpload(media.file, storagePath);
-                    await api.createPlaceMedia(placeId, {
-                      media_type: media.type,
-                      url,
-                      order_index: i,
-                    });
-                  } catch (err: any) {
-                    console.error(`Error subiendo media del punto turístico [${i}]:`, err);
-                  }
+              const newItems = mediaFiles.filter((m) => m.file);
+              for (let i = 0; i < newItems.length; i++) {
+                const media = newItems[i];
+                if (!media.file) continue;
+                try {
+                  const ts = Date.now();
+                  const baseName = media.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                  const storagePath = `${placeId}/${ts}-${baseName}`;
+                  const url = await prepareAndUpload(media.file, storagePath);
+                  await api.createPlaceMedia(placeId, {
+                    media_type: media.type,
+                    url,
+                    order_index: mediaFiles.indexOf(media),
+                  });
+                } catch (err: any) {
+                  console.error(`Error subiendo media [${i}]:`, err);
                 }
               }
 
               router.push("/puntos-turisticos");
             } catch (err: any) {
-              setSubmitError(err.message || "Error al crear el punto turístico");
-              console.error("Error creating place:", err);
+              setSubmitError(err.message || "Error al guardar el punto turístico");
+              console.error(err);
             } finally {
               setIsSubmitting(false);
             }
           }}
           className="space-y-6"
         >
-          {/* Primera fila: Información básica y clasificación */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Información Básica */}
             <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
                 Información Básica
@@ -259,7 +332,6 @@ export default function NuevoPuntoTuristicoPage() {
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   />
                 </div>
-
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700">
                     Descripción
@@ -276,7 +348,6 @@ export default function NuevoPuntoTuristicoPage() {
               </div>
             </section>
 
-            {/* Clasificación */}
             <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
                 Clasificación
@@ -299,7 +370,6 @@ export default function NuevoPuntoTuristicoPage() {
                     <option value="categoria_3">Categoría 3</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700">
                     Región
@@ -313,7 +383,6 @@ export default function NuevoPuntoTuristicoPage() {
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   />
                 </div>
-
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700">
                     País
@@ -331,7 +400,6 @@ export default function NuevoPuntoTuristicoPage() {
             </section>
           </div>
 
-          {/* Mapa de Ubicación */}
           <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
               Ubicación en el Mapa <span className="text-red-500">*</span>
@@ -349,7 +417,6 @@ export default function NuevoPuntoTuristicoPage() {
             )}
           </section>
 
-          {/* Media - Fotos y Videos */}
           <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
               Fotos y Videos
@@ -382,13 +449,13 @@ export default function NuevoPuntoTuristicoPage() {
                     >
                       {media.type === "video" ? (
                         <video
-                          src={media.preview}
+                          src={mediaSrc(media)}
                           className="h-full w-full object-cover"
                           controls
                         />
                       ) : (
                         <img
-                          src={media.preview}
+                          src={mediaSrc(media)}
                           alt={`Preview ${index + 1}`}
                           className="h-full w-full object-cover"
                         />
@@ -455,7 +522,6 @@ export default function NuevoPuntoTuristicoPage() {
             </div>
           </section>
 
-          {/* Footer con botones */}
           <div className="flex items-center justify-end gap-3 border-t border-[#EBEBEB] pt-6">
             <Link
               href="/puntos-turisticos"
@@ -468,7 +534,7 @@ export default function NuevoPuntoTuristicoPage() {
               disabled={isSubmitting}
               className="rounded-lg bg-[#3FA9F5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3FA9F5]/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Creando..." : "Crear Punto Turístico"}
+              {isSubmitting ? "Guardando..." : "Guardar cambios"}
             </button>
           </div>
         </form>
@@ -477,7 +543,7 @@ export default function NuevoPuntoTuristicoPage() {
       {selectedMediaIndex !== null &&
         mediaFiles[selectedMediaIndex]?.type === "photo_360" && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-            <div className="relative w-full max-w-6xl h-full max-h-[90vh]">
+            <div className="relative h-full max-h-[90vh] w-full max-w-6xl">
               <button
                 type="button"
                 onClick={() => setSelectedMediaIndex(null)}
@@ -498,7 +564,7 @@ export default function NuevoPuntoTuristicoPage() {
                 </svg>
               </button>
               <PanoramaViewer
-                imageUrl={mediaFiles[selectedMediaIndex].preview || ""}
+                imageUrl={mediaSrc(mediaFiles[selectedMediaIndex])}
                 onClose={() => setSelectedMediaIndex(null)}
               />
             </div>

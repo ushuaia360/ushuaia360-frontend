@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/admin/page-header";
+import DeleteConfirmModal from "@/components/admin/DeleteConfirmModal";
 import { api } from "@/lib/api";
 
 const categoryLabels: Record<string, string> = {
@@ -38,6 +39,9 @@ export default function PuntosTuristicosPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [placeToDelete, setPlaceToDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadPlaces();
@@ -88,6 +92,29 @@ export default function PuntosTuristicosPage() {
     return matchesSearch;
   });
 
+  const handleDeleteClick = (place: Place) => {
+    setPlaceToDelete({
+      id: place.id,
+      name: place.name || place.region || place.slug || "este punto turístico",
+    });
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!placeToDelete) return;
+    try {
+      setDeletingId(placeToDelete.id);
+      await api.deletePlace(placeToDelete.id);
+      await loadPlaces();
+      setShowDeleteModal(false);
+    } catch (err: any) {
+      setError(err.message || "Error al eliminar el punto turístico");
+    } finally {
+      setDeletingId(null);
+      setPlaceToDelete(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader title="Puntos Turísticos">
@@ -132,7 +159,7 @@ export default function PuntosTuristicosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#F0F0F0]">
-                  {["Nombre", "Categoría", "Región", "País", "Ubicación", "Creado"].map((h) => (
+                  {["Nombre", "Categoría", "Región", "País", "Ubicación", "Creado", "Acciones"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400"
@@ -162,6 +189,9 @@ export default function PuntosTuristicosPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="h-4 w-20 rounded bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="ml-auto h-4 w-24 rounded bg-gray-100" />
                     </td>
                   </tr>
                 ))}
@@ -194,6 +224,9 @@ export default function PuntosTuristicosPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                     Creado
+                  </th>
+                  <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Acciones
                   </th>
                 </tr>
               </thead>
@@ -236,6 +269,24 @@ export default function PuntosTuristicosPage() {
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {formatDate(place.created_at)}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/puntos-turisticos/editar/${place.id}`}
+                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                        >
+                          Editar
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClick(place)}
+                          disabled={deletingId === place.id}
+                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingId === place.id ? "Eliminando..." : "Eliminar"}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -243,6 +294,18 @@ export default function PuntosTuristicosPage() {
           </div>
         )}
       </div>
+
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setPlaceToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Eliminar punto turístico"
+        message="¿Estás seguro de que deseas eliminar este punto turístico? Se eliminará también su galería de medios."
+        itemName={placeToDelete?.name}
+      />
     </div>
   );
 }

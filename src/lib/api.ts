@@ -249,6 +249,52 @@ export const api = {
     });
   },
 
+  createPlaceMedia: async (
+    placeId: string,
+    data: {
+      media_type: string;
+      url: string;
+      thumbnail_url?: string;
+      order_index?: number;
+    }
+  ) => {
+    return apiRequest<{ message: string; media: any }>(`/places/${placeId}/media`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updatePlace: async (
+    placeId: string,
+    data: {
+      name?: string;
+      description?: string;
+      slug?: string;
+      category?: string;
+      region?: string;
+      country?: string;
+      location?: { latitude: number; longitude: number };
+      is_premium?: boolean;
+    }
+  ) => {
+    return apiRequest<{ message: string; place: any }>(`/places/${placeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deletePlace: async (placeId: string) => {
+    return apiRequest<{ message: string }>(`/places/${placeId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  deletePlaceMedia: async (placeId: string, mediaId: string) => {
+    return apiRequest<{ message: string }>(`/places/${placeId}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Users
   getUsers: async () => {
     return apiRequest<{ users: any[] }>('/users');
