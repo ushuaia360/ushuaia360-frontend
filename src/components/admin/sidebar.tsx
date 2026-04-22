@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   LogOut,
   Mountain,
+  Landmark,
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
@@ -20,6 +21,7 @@ const nav = [
   { href: "/", label: "Home", icon: House },
   { href: "/usuarios", label: "Usuarios", icon: Users },
   { href: "/senderos", label: "Senderos", icon: MapPin },
+  { href: "/puntos-turisticos", label: "Puntos Turísticos", icon: Landmark },
   { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
 ];
 

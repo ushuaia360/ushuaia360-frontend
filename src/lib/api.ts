@@ -208,6 +208,47 @@ export const api = {
     });
   },
 
+  // Places (Puntos Turísticos)
+  getPlaces: async (params?: {
+    category?: string;
+    region?: string;
+    country?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.region) queryParams.append('region', params.region);
+    if (params?.country) queryParams.append('country', params.country);
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    const query = queryParams.toString();
+    return apiRequest<{ places: any[]; total: number; limit: number; offset: number }>(
+      `/places${query ? `?${query}` : ''}`
+    );
+  },
+
+  getPlace: async (placeId: string) => {
+    return apiRequest<{ place: any }>(`/places/${placeId}`);
+  },
+
+  createPlace: async (data: {
+    name: string;
+    description?: string;
+    slug?: string;
+    category: 'categoria_1' | 'categoria_2' | 'categoria_3';
+    region?: string;
+    country?: string;
+    location: { latitude: number; longitude: number };
+    is_premium?: boolean;
+  }) => {
+    return apiRequest<{ message: string; place: any }>('/places', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Users
   getUsers: async () => {
     return apiRequest<{ users: any[] }>('/users');
