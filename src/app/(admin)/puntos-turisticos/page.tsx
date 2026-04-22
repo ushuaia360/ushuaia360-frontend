@@ -5,18 +5,11 @@ import Link from "next/link";
 import PageHeader from "@/components/admin/page-header";
 import DeleteConfirmModal from "@/components/admin/DeleteConfirmModal";
 import { api } from "@/lib/api";
-
-const categoryLabels: Record<string, string> = {
-  categoria_1: "Categoría 1",
-  categoria_2: "Categoría 2",
-  categoria_3: "Categoría 3",
-};
-
-const categoryStyle: Record<string, string> = {
-  categoria_1: "bg-emerald-50 text-emerald-700",
-  categoria_2: "bg-[#EBF5FE] text-[#3FA9F5]",
-  categoria_3: "bg-[#FFF0E6] text-[#E65C00]",
-};
+import {
+  placeCategoryLabels,
+  placeCategoryStyle,
+  PLACE_CATEGORIES,
+} from "@/lib/placeCategories";
 
 interface Place {
   id: string;
@@ -147,9 +140,11 @@ export default function PuntosTuristicosPage() {
             className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-600 outline-none transition-colors focus:border-[#3FA9F5]"
           >
             <option value="">Todas las categorías</option>
-            <option value="categoria_1">Categoría 1</option>
-            <option value="categoria_2">Categoría 2</option>
-            <option value="categoria_3">Categoría 3</option>
+            {PLACE_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -159,7 +154,7 @@ export default function PuntosTuristicosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#F0F0F0]">
-                  {["Nombre", "Categoría", "Región", "País", "Ubicación", "Creado", "Acciones"].map((h) => (
+                  {["Nombre", "Categoría", "Premium", "Región", "País", "Ubicación", "Creado", "Acciones"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400"
@@ -177,6 +172,9 @@ export default function PuntosTuristicosPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="h-5 w-20 rounded-full bg-gray-100" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-10 rounded bg-gray-100" />
                     </td>
                     <td className="px-4 py-3">
                       <div className="h-4 w-24 rounded bg-gray-100" />
@@ -214,6 +212,9 @@ export default function PuntosTuristicosPage() {
                     Categoría
                   </th>
                   <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Premium
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                     Región
                   </th>
                   <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
@@ -248,13 +249,20 @@ export default function PuntosTuristicosPage() {
                       {place.category ? (
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                            categoryStyle[place.category] || "bg-gray-100 text-gray-600"
+                            placeCategoryStyle[place.category] || "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {categoryLabels[place.category] || place.category}
+                          {placeCategoryLabels[place.category] || place.category}
                         </span>
                       ) : (
                         <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {place.is_premium ? (
+                        <span className="text-amber-600">Sí</span>
+                      ) : (
+                        <span className="text-gray-400">No</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">

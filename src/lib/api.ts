@@ -237,7 +237,7 @@ export const api = {
     name: string;
     description?: string;
     slug?: string;
-    category: 'categoria_1' | 'categoria_2' | 'categoria_3';
+    category: string;
     region?: string;
     country?: string;
     location: { latitude: number; longitude: number };

@@ -7,7 +7,7 @@ export default function ComentariosPage() {
   return (
     <div>
       <PageHeader title="Comentarios" />
-      <p className="mx-8 -mt-2 max-w-2xl text-sm text-gray-500">
+      <p className="mx-8 max-w-2xl text-sm text-gray-500 mt-4">
         Elegí un sendero para ver las reseñas. Podés filtrar por nombre, dificultad y estado.
       </p>
       <SenderosTrailsList rowHrefBase="/comentarios" />

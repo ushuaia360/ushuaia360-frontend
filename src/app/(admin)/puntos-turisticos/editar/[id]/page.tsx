@@ -8,6 +8,7 @@ import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { uploadTouristPlaceFile } from "@/lib/supabaseClient";
 import { compressToWebp, isAllowed } from "@/lib/image";
+import { PLACE_CATEGORIES, type PlaceCategorySlug } from "@/lib/placeCategories";
 
 const LocationPickerMap = dynamic(() => import("../../nuevo/LocationPickerMap"), {
   ssr: false,
@@ -35,8 +36,6 @@ interface MediaFile {
   order: number;
 }
 
-type Category = "categoria_1" | "categoria_2" | "categoria_3";
-
 export default function EditarPuntoTuristicoPage() {
   const router = useRouter();
   const params = useParams();
@@ -48,7 +47,8 @@ export default function EditarPuntoTuristicoPage() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    category: "" as Category | "",
+    category: "" as PlaceCategorySlug | "",
+    is_premium: false,
     region: "Tierra del Fuego",
     country: "Argentina",
   });
@@ -79,7 +79,8 @@ export default function EditarPuntoTuristicoPage() {
         setFormData({
           name: place.name || "",
           description: place.description || "",
-          category: (place.category as Category) || "",
+          category: (place.category as PlaceCategorySlug) || "",
+          is_premium: Boolean(place.is_premium),
           region: place.region || "Tierra del Fuego",
           country: place.country || "Argentina",
         });
@@ -127,8 +128,12 @@ export default function EditarPuntoTuristicoPage() {
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? Boolean(checked) : value,
+    }));
   };
 
   const determineMediaType = (file: File): MediaType => {
@@ -266,7 +271,8 @@ export default function EditarPuntoTuristicoPage() {
                 name: formData.name.trim(),
                 description: formData.description,
                 slug: slugFromName || undefined,
-                category: formData.category as Category,
+                category: formData.category,
+                is_premium: formData.is_premium,
                 region: formData.region,
                 country: formData.country,
                 location: {
@@ -365,10 +371,25 @@ export default function EditarPuntoTuristicoPage() {
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   >
                     <option value="">Seleccionar categoría</option>
-                    <option value="categoria_1">Categoría 1</option>
-                    <option value="categoria_2">Categoría 2</option>
-                    <option value="categoria_3">Categoría 3</option>
+                    {PLACE_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
                   </select>
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <input
+                    id="is_premium"
+                    type="checkbox"
+                    name="is_premium"
+                    checked={formData.is_premium}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-[#EBEBEB] text-[#3FA9F5] focus:ring-[#3FA9F5]/20"
+                  />
+                  <label htmlFor="is_premium" className="text-sm text-gray-700">
+                    Punto con sendero premium (restringido a usuarios premium)
+                  </label>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700">

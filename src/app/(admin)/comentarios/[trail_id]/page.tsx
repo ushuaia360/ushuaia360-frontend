@@ -160,7 +160,7 @@ export default function ComentariosTrailPage() {
                     return (
                       <li key={stars} className="flex items-center gap-2">
                         <span className="w-3 text-amber-500">{stars}★</span>
-                        <span className="tabular-nums text-gray-800">{n}</span>
+                        <span className="tabular-nums ml-2 text-gray-800">{n}</span>
                       </li>
                     );
                   })}
