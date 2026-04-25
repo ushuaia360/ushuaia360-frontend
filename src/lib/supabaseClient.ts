@@ -38,6 +38,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const TRAILS_BUCKET = "trails";
 export const TOURIST_PLACES_BUCKET = "tourist_places";
+/** Fotos de reseñas (app móvil sube vía API → Supabase Storage). */
+export const REVIEWS_BUCKET = "reviews";
 
 export function getPublicUrlForBucket(bucket: string, path: string): string {
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);

@@ -100,6 +100,7 @@ export const api = {
         avatar_url: string | null;
         rating: number;
         comment: string | null;
+        image_urls?: string[];
         created_at: string;
       }>;
       total: number;
