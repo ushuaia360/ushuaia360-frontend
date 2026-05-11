@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/admin/page-header";
 import DeleteConfirmModal from "@/components/admin/DeleteConfirmModal";
+import TablePagination, {
+  ADMIN_TABLE_PAGE_SIZE,
+} from "@/components/admin/table-pagination";
 import { api } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const difficultyStyle: Record<string, string> = {
   easy: "bg-emerald-50 text-emerald-700",
@@ -50,6 +54,8 @@ interface Trail {
 
 export default function SenderosPage() {
   const [trails, setTrails] = useState<Trail[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,29 +63,50 @@ export default function SenderosPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [trailToDelete, setTrailToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [trailToDelete, setTrailToDelete] = useState<{ id: string; name: string } | null>(
+    null
+  );
+
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
   useEffect(() => {
-    loadTrails();
-  }, [selectedDifficulty, selectedStatus]);
+    setPage(1);
+  }, [selectedDifficulty, selectedStatus, debouncedSearch]);
 
-  const loadTrails = async () => {
+  const loadTrails = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const params: any = {};
+      const params: {
+        difficulty?: string;
+        status_id?: number;
+        limit: number;
+        offset: number;
+        search?: string;
+      } = {
+        limit: ADMIN_TABLE_PAGE_SIZE,
+        offset: (page - 1) * ADMIN_TABLE_PAGE_SIZE,
+      };
       if (selectedDifficulty) params.difficulty = selectedDifficulty;
-      if (selectedStatus) params.status_id = parseInt(selectedStatus);
-      
+      if (selectedStatus) params.status_id = parseInt(selectedStatus, 10);
+      const s = debouncedSearch.trim();
+      if (s) params.search = s;
+
       const response = await api.getTrails(params);
       setTrails(response.trails);
-    } catch (err: any) {
-      setError(err.message || "Error al cargar senderos");
+      setTotal(typeof response.total === "number" ? response.total : 0);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al cargar senderos";
+      setError(message);
       console.error("Error loading trails:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, selectedDifficulty, selectedStatus, debouncedSearch]);
+
+  useEffect(() => {
+    void loadTrails();
+  }, [loadTrails]);
 
   const formatDuration = (minutes?: number): string => {
     if (!minutes) return "-";
@@ -110,13 +137,12 @@ export default function SenderosPage() {
     }
   };
 
-  const filteredTrails = trails.filter((trail) => {
-    const matchesSearch = !searchTerm || 
-      trail.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trail.slug?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trail.region?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  const setPageNormalized = useCallback((next: number) => {
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_TABLE_PAGE_SIZE));
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    setPage(clamped);
+  }, [total]);
+
   return (
     <div>
       <PageHeader title="Senderos">
@@ -207,116 +233,126 @@ export default function SenderosPage() {
               </tbody>
             </table>
           </div>
-        ) : filteredTrails.length === 0 ? (
-          <div className="rounded-xl border border-[#EBEBEB] bg-white p-12 text-center">
-            <p className="text-sm text-gray-500">No se encontraron senderos</p>
-          </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#F0F0F0]">
-                  <th className="w-16 px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Imagen
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Sendero
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Dificultad
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Duración
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Distancia
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F5F5F5]">
-                {filteredTrails.map((trail) => {
-                  const thumbUrl =
-                    trail.thumbnail_url ||
-                    trail.image_urls?.[0] ||
-                    PLACEHOLDER_IMAGE;
-                  return (
-                  <tr
-                    key={trail.id}
-                    className="transition-colors hover:bg-gray-50/50"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">
-                        <img
-                          src={thumbUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = PLACEHOLDER_IMAGE;
-                          }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-gray-800">
-                        {trail.name || trail.region || trail.slug || "Sin nombre"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                          difficultyStyle[trail.difficulty] || "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {difficultyLabels[trail.difficulty] || trail.difficulty}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDuration(trail.duration_minutes)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {trail.distance_km ? `${trail.distance_km} km` : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                          trail.status_id
-                            ? statusStyle[trail.status_id] || "bg-gray-100 text-gray-600"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {trail.status_id
-                          ? statusLabels[trail.status_id] || "Sin estado"
-                          : "Sin estado"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          href={`/senderos/editar/${trail.id}`}
-                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                        >
-                          Editar
-                        </Link>
-                        <button
-                          onClick={() => handleDeleteClick(trail)}
-                          disabled={deletingId === trail.id}
-                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {deletingId === trail.id ? "Eliminando..." : "Eliminar"}
-                        </button>
-                      </div>
-                    </td>
+            {trails.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-sm text-gray-500">No se encontraron senderos</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#F0F0F0]">
+                    <th className="w-16 px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Imagen
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Sendero
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Dificultad
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Duración
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Distancia
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Acciones
+                    </th>
                   </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[#F5F5F5]">
+                  {trails.map((trail) => {
+                    const thumbUrl =
+                      trail.thumbnail_url ||
+                      trail.image_urls?.[0] ||
+                      PLACEHOLDER_IMAGE;
+                    return (
+                      <tr
+                        key={trail.id}
+                        className="transition-colors hover:bg-gray-50/50"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">
+                            <img
+                              src={thumbUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = PLACEHOLDER_IMAGE;
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-medium text-gray-800">
+                            {trail.name || trail.region || trail.slug || "Sin nombre"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                              difficultyStyle[trail.difficulty] || "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {difficultyLabels[trail.difficulty] || trail.difficulty}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {formatDuration(trail.duration_minutes)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {trail.distance_km ? `${trail.distance_km} km` : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                              trail.status_id
+                                ? statusStyle[trail.status_id] || "bg-gray-100 text-gray-600"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {trail.status_id
+                              ? statusLabels[trail.status_id] || "Sin estado"
+                              : "Sin estado"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Link
+                              href={`/senderos/editar/${trail.id}`}
+                              className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                            >
+                              Editar
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClick(trail)}
+                              disabled={deletingId === trail.id}
+                              className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingId === trail.id ? "Eliminando..." : "Eliminar"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <TablePagination
+              page={page}
+              total={total}
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+              loading={loading}
+              onPageChange={setPageNormalized}
+            />
           </div>
         )}
       </div>

@@ -18,13 +18,9 @@ export interface TrailCommentCount {
 
 export interface DashboardStats {
   active_trails: number;
-  trails_in_review: number;
   users_total: number;
-  users_new_current_month: number;
-  users_new_delta_vs_previous_month: number;
   comments_total: number;
-  comments_new_current_month: number;
-  comments_new_delta_vs_previous_month: number;
+  trail_completions_total: number;
   recent_trails: RecentTrail[];
   trail_comments: TrailCommentCount[];
 }
@@ -75,13 +71,21 @@ async function apiRequest<T>(
 
 export const api = {
   // Trails (Senderos)
-  getTrails: async (params?: { difficulty?: string; status_id?: number; limit?: number; offset?: number }) => {
+  getTrails: async (params?: {
+    difficulty?: string;
+    status_id?: number;
+    limit?: number;
+    offset?: number;
+    search?: string;
+  }) => {
     const queryParams = new URLSearchParams();
     if (params?.difficulty) queryParams.append('difficulty', params.difficulty);
-    if (params?.status_id) queryParams.append('status_id', params.status_id.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.offset) queryParams.append('offset', params.offset.toString());
-    
+    if (params?.status_id != null) queryParams.append('status_id', params.status_id.toString());
+    if (params?.limit != null) queryParams.append('limit', params.limit.toString());
+    if (params?.offset != null) queryParams.append('offset', params.offset.toString());
+    const q = params?.search?.trim();
+    if (q) queryParams.append('search', q);
+
     const query = queryParams.toString();
     return apiRequest<{ trails: any[]; total: number; limit: number; offset: number }>(
       `/trails${query ? `?${query}` : ''}`
@@ -245,13 +249,16 @@ export const api = {
     country?: string;
     limit?: number;
     offset?: number;
+    search?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.category) queryParams.append('category', params.category);
     if (params?.region) queryParams.append('region', params.region);
     if (params?.country) queryParams.append('country', params.country);
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.offset) queryParams.append('offset', params.offset.toString());
+    if (params?.limit != null) queryParams.append('limit', params.limit.toString());
+    if (params?.offset != null) queryParams.append('offset', params.offset.toString());
+    const q = params?.search?.trim();
+    if (q) queryParams.append('search', q);
 
     const query = queryParams.toString();
     return apiRequest<{ places: any[]; total: number; limit: number; offset: number }>(
@@ -326,8 +333,31 @@ export const api = {
   },
 
   // Users
-  getUsers: async () => {
-    return apiRequest<{ users: any[] }>('/users');
+  getUsers: async (params?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    role?: 'admin' | 'user';
+    suspended?: boolean;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.limit != null) queryParams.append('limit', params.limit.toString());
+    if (params?.offset != null) queryParams.append('offset', params.offset.toString());
+    const q = params?.search?.trim();
+    if (q) queryParams.append('search', q);
+    if (params?.role === 'admin' || params?.role === 'user') {
+      queryParams.append('role', params.role);
+    }
+    if (params?.suspended === true) queryParams.append('suspended', 'true');
+    if (params?.suspended === false) queryParams.append('suspended', 'false');
+
+    const query = queryParams.toString();
+    return apiRequest<{
+      users: any[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/users${query ? `?${query}` : ''}`);
   },
 
   suspendUser: async (userId: string, isSuspended: boolean) => {

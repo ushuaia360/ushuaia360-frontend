@@ -1,9 +1,13 @@
 "use client";
 
 import PageHeader from "@/components/admin/page-header";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { X } from "lucide-react";
+import TablePagination, {
+  ADMIN_TABLE_PAGE_SIZE,
+} from "@/components/admin/table-pagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const roleStyle: Record<string, string> = {
   Admin: "bg-purple-200 text-purple-700",
@@ -327,33 +331,64 @@ function CreateAdminModal({ isOpen, onClose, onSuccess }: CreateAdminModalProps)
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [suspendModal, setSuspendModal] = useState<{
     isOpen: boolean;
     user: User | null;
   }>({ isOpen: false, user: null });
   const [createAdminModal, setCreateAdminModal] = useState(false);
-  
-  // Estados para los filtros
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("Todos los roles");
   const [statusFilter, setStatusFilter] = useState<string>("Todos los estados");
 
-  const loadUsers = async () => {
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, roleFilter, statusFilter]);
+
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.getUsers();
+      const params: {
+        limit: number;
+        offset: number;
+        search?: string;
+        role?: "admin" | "user";
+        suspended?: boolean;
+      } = {
+        limit: ADMIN_TABLE_PAGE_SIZE,
+        offset: (page - 1) * ADMIN_TABLE_PAGE_SIZE,
+      };
+      const s = debouncedSearch.trim();
+      if (s) params.search = s;
+      if (roleFilter === "Admin") params.role = "admin";
+      else if (roleFilter === "Usuario") params.role = "user";
+      if (statusFilter === "Activo") params.suspended = false;
+      else if (statusFilter === "Suspendido") params.suspended = true;
+
+      const res = await api.getUsers(params);
       setUsers(res.users);
+      setTotal(typeof res.total === "number" ? res.total : 0);
     } catch (error) {
       console.error("Error loading users:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, debouncedSearch, roleFilter, statusFilter]);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    void loadUsers();
+  }, [loadUsers]);
+
+  const setPageNormalized = useCallback((next: number) => {
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_TABLE_PAGE_SIZE));
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    setPage(clamped);
+  }, [total]);
 
   const handleSuspendClick = (user: User) => {
     setSuspendModal({ isOpen: true, user });
@@ -366,35 +401,15 @@ export default function UsuariosPage() {
       const isSuspended = !suspendModal.user.is_suspended;
       await api.suspendUser(suspendModal.user.id, isSuspended);
       await loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error suspending user:", error);
-      alert(error.message || "Error al suspender/reactivar el usuario");
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Error al suspender/reactivar el usuario";
+      alert(message);
     }
   };
-
-  // Función para filtrar usuarios
-  const filteredUsers = users.filter((user) => {
-    // Filtro por búsqueda (nombre o email)
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch =
-      !searchQuery ||
-      user.full_name.toLowerCase().includes(searchLower) ||
-      user.email.toLowerCase().includes(searchLower);
-
-    // Filtro por rol
-    const matchesRole =
-      roleFilter === "Todos los roles" ||
-      (roleFilter === "Admin" && user.is_admin) ||
-      (roleFilter === "Usuario" && !user.is_admin);
-
-    // Filtro por estado
-    const matchesStatus =
-      statusFilter === "Todos los estados" ||
-      (statusFilter === "Activo" && !user.is_suspended) ||
-      (statusFilter === "Suspendido" && user.is_suspended);
-
-    return matchesSearch && matchesRole && matchesStatus;
-  });
 
   return (
     <div>
@@ -468,14 +483,14 @@ export default function UsuariosPage() {
                   <UserRowSkeleton />
                   <UserRowSkeleton />
                 </>
-              ) : filteredUsers.length === 0 ? (
+              ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
                     No se encontraron usuarios que coincidan con los filtros
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => (
+                users.map((u) => (
                   <tr
                     key={u.id}
                     className="transition-colors hover:bg-gray-50/80"
@@ -529,6 +544,15 @@ export default function UsuariosPage() {
               )}
             </tbody>
           </table>
+          {!loading && (
+            <TablePagination
+              page={page}
+              total={total}
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+              loading={loading}
+              onPageChange={setPageNormalized}
+            />
+          )}
         </div>
       </div>
 

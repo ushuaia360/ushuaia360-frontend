@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import TablePagination, {
+  ADMIN_TABLE_PAGE_SIZE,
+} from "@/components/admin/table-pagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const difficultyStyle: Record<string, string> = {
   easy: "bg-emerald-50 text-emerald-700",
@@ -54,26 +58,42 @@ interface SenderosTrailsListProps {
 export function SenderosTrailsList({ rowHrefBase }: SenderosTrailsListProps) {
   const router = useRouter();
   const [trails, setTrails] = useState<TrailRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
 
-  useEffect(() => {
-    loadTrails();
-  }, [selectedDifficulty, selectedStatus]);
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
-  const loadTrails = async () => {
+  useEffect(() => {
+    setPage(1);
+  }, [selectedDifficulty, selectedStatus, debouncedSearch]);
+
+  const loadTrails = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const params: { difficulty?: string; status_id?: number } = {};
+      const params: {
+        difficulty?: string;
+        status_id?: number;
+        limit: number;
+        offset: number;
+        search?: string;
+      } = {
+        limit: ADMIN_TABLE_PAGE_SIZE,
+        offset: (page - 1) * ADMIN_TABLE_PAGE_SIZE,
+      };
       if (selectedDifficulty) params.difficulty = selectedDifficulty;
       if (selectedStatus) params.status_id = parseInt(selectedStatus, 10);
+      const s = debouncedSearch.trim();
+      if (s) params.search = s;
 
       const response = await api.getTrails(params);
       setTrails(response.trails);
+      setTotal(typeof response.total === "number" ? response.total : 0);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al cargar senderos";
       setError(message);
@@ -81,7 +101,17 @@ export function SenderosTrailsList({ rowHrefBase }: SenderosTrailsListProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, selectedDifficulty, selectedStatus, debouncedSearch]);
+
+  useEffect(() => {
+    void loadTrails();
+  }, [loadTrails]);
+
+  const setPageNormalized = useCallback((next: number) => {
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_TABLE_PAGE_SIZE));
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    setPage(clamped);
+  }, [total]);
 
   const formatDuration = (minutes?: number): string => {
     if (!minutes) return "-";
@@ -91,16 +121,6 @@ export function SenderosTrailsList({ rowHrefBase }: SenderosTrailsListProps) {
     if (mins === 0) return `${hours} h`;
     return `${hours} h ${mins} min`;
   };
-
-  const filteredTrails = trails.filter((trail) => {
-    if (!searchTerm) return true;
-    const q = searchTerm.toLowerCase();
-    return (
-      trail.name?.toLowerCase().includes(q) ||
-      trail.slug?.toLowerCase().includes(q) ||
-      trail.region?.toLowerCase().includes(q)
-    );
-  });
 
   const base = rowHrefBase.replace(/\/$/, "");
 
@@ -183,98 +203,111 @@ export function SenderosTrailsList({ rowHrefBase }: SenderosTrailsListProps) {
             </tbody>
           </table>
         </div>
-      ) : filteredTrails.length === 0 ? (
-        <div className="rounded-xl border border-[#EBEBEB] bg-white p-12 text-center">
-          <p className="text-sm text-gray-500">No se encontraron senderos</p>
-        </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[#F0F0F0]">
-                <th className="w-16 px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Imagen
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Sendero
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Dificultad
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Duración
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Distancia
-                </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  Estado
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F5F5F5]">
-              {filteredTrails.map((trail) => {
-                const thumbUrl = trail.thumbnail_url || trail.image_urls?.[0] || PLACEHOLDER_IMAGE;
-                return (
-                  <tr
-                    key={trail.id}
-                    role="link"
-                    tabIndex={0}
-                    className="cursor-pointer transition-colors hover:bg-gray-50/50"
-                    onClick={() => router.push(`${base}/${trail.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        router.push(`${base}/${trail.id}`);
-                      }
-                    }}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">
-                        <img
-                          src={thumbUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = PLACEHOLDER_IMAGE;
-                          }}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-gray-800">
-                        {trail.name || trail.region || trail.slug || "Sin nombre"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                          difficultyStyle[trail.difficulty] || "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {difficultyLabels[trail.difficulty] || trail.difficulty}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{formatDuration(trail.duration_minutes)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {trail.distance_km ? `${trail.distance_km} km` : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                          trail.status_id
-                            ? statusStyle[trail.status_id] || "bg-gray-100 text-gray-600"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {trail.status_id ? statusLabels[trail.status_id] || "Sin estado" : "Sin estado"}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {trails.length === 0 ? (
+            <div className="p-12 text-center">
+              <p className="text-sm text-gray-500">No se encontraron senderos</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#F0F0F0]">
+                  <th className="w-16 px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Imagen
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Sendero
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Dificultad
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Duración
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Distancia
+                  </th>
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Estado
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F5F5F5]">
+                {trails.map((trail) => {
+                  const thumbUrl = trail.thumbnail_url || trail.image_urls?.[0] || PLACEHOLDER_IMAGE;
+                  return (
+                    <tr
+                      key={trail.id}
+                      role="link"
+                      tabIndex={0}
+                      className="cursor-pointer transition-colors hover:bg-gray-50/50"
+                      onClick={() => router.push(`${base}/${trail.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(`${base}/${trail.id}`);
+                        }
+                      }}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">
+                          <img
+                            src={thumbUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = PLACEHOLDER_IMAGE;
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-medium text-gray-800">
+                          {trail.name || trail.region || trail.slug || "Sin nombre"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                            difficultyStyle[trail.difficulty] || "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {difficultyLabels[trail.difficulty] || trail.difficulty}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatDuration(trail.duration_minutes)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {trail.distance_km ? `${trail.distance_km} km` : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                            trail.status_id
+                              ? statusStyle[trail.status_id] || "bg-gray-100 text-gray-600"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {trail.status_id
+                            ? statusLabels[trail.status_id] || "Sin estado"
+                            : "Sin estado"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <TablePagination
+            page={page}
+            total={total}
+            pageSize={ADMIN_TABLE_PAGE_SIZE}
+            loading={loading}
+            onPageChange={setPageNormalized}
+          />
         </div>
       )}
     </div>

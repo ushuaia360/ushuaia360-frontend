@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/admin/page-header";
 import DeleteConfirmModal from "@/components/admin/DeleteConfirmModal";
+import TablePagination, {
+  ADMIN_TABLE_PAGE_SIZE,
+} from "@/components/admin/table-pagination";
 import { api } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   placeCategoryLabels,
   placeCategoryStyle,
@@ -28,34 +32,63 @@ interface Place {
 
 export default function PuntosTuristicosPage() {
   const [places, setPlaces] = useState<Place[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [placeToDelete, setPlaceToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [placeToDelete, setPlaceToDelete] = useState<{ id: string; name: string } | null>(
+    null
+  );
+
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
 
   useEffect(() => {
-    loadPlaces();
-  }, [selectedCategory]);
+    setPage(1);
+  }, [selectedCategory, debouncedSearch]);
 
-  const loadPlaces = async () => {
+  const loadPlaces = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const params: any = {};
+      const params: {
+        category?: string;
+        limit: number;
+        offset: number;
+        search?: string;
+      } = {
+        limit: ADMIN_TABLE_PAGE_SIZE,
+        offset: (page - 1) * ADMIN_TABLE_PAGE_SIZE,
+      };
       if (selectedCategory) params.category = selectedCategory;
+      const s = debouncedSearch.trim();
+      if (s) params.search = s;
 
       const response = await api.getPlaces(params);
       setPlaces(response.places);
-    } catch (err: any) {
-      setError(err.message || "Error al cargar puntos turísticos");
+      setTotal(typeof response.total === "number" ? response.total : 0);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Error al cargar puntos turísticos";
+      setError(message);
       console.error("Error loading places:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, selectedCategory, debouncedSearch]);
+
+  useEffect(() => {
+    void loadPlaces();
+  }, [loadPlaces]);
+
+  const setPageNormalized = useCallback((next: number) => {
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_TABLE_PAGE_SIZE));
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    setPage(clamped);
+  }, [total]);
 
   const formatDate = (iso?: string): string => {
     if (!iso) return "-";
@@ -74,16 +107,6 @@ export default function PuntosTuristicosPage() {
     if (lat == null || lng == null) return "-";
     return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   };
-
-  const filteredPlaces = places.filter((place) => {
-    const matchesSearch =
-      !searchTerm ||
-      place.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      place.slug?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      place.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      place.country?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
 
   const handleDeleteClick = (place: Place) => {
     setPlaceToDelete({
@@ -196,109 +219,119 @@ export default function PuntosTuristicosPage() {
               </tbody>
             </table>
           </div>
-        ) : filteredPlaces.length === 0 ? (
-          <div className="rounded-xl border border-[#EBEBEB] bg-white p-12 text-center">
-            <p className="text-sm text-gray-500">No se encontraron puntos turísticos</p>
-          </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#F0F0F0]">
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Nombre
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Categoría
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Premium
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Región
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    País
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Ubicación
-                  </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Creado
-                  </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F5F5F5]">
-                {filteredPlaces.map((place) => (
-                  <tr
-                    key={place.id}
-                    className="transition-colors hover:bg-gray-50/50"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-gray-800">
-                        {place.name || place.slug || "Sin nombre"}
-                      </p>
-                      {place.slug && (
-                        <p className="text-[11px] text-gray-400">{place.slug}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {place.category ? (
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                            placeCategoryStyle[place.category] || "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {placeCategoryLabels[place.category] || place.category}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {place.is_premium ? (
-                        <span className="text-amber-600">Sí</span>
-                      ) : (
-                        <span className="text-gray-400">No</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {place.region || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {place.country || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatCoords(place.latitude, place.longitude)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(place.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          href={`/puntos-turisticos/editar/${place.id}`}
-                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                        >
-                          Editar
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteClick(place)}
-                          disabled={deletingId === place.id}
-                          className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {deletingId === place.id ? "Eliminando..." : "Eliminar"}
-                        </button>
-                      </div>
-                    </td>
+            {places.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-sm text-gray-500">No se encontraron puntos turísticos</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#F0F0F0]">
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Nombre
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Categoría
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Premium
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Región
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      País
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Ubicación
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Creado
+                    </th>
+                    <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Acciones
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[#F5F5F5]">
+                  {places.map((place) => (
+                    <tr
+                      key={place.id}
+                      className="transition-colors hover:bg-gray-50/50"
+                    >
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-medium text-gray-800">
+                          {place.name || place.slug || "Sin nombre"}
+                        </p>
+                        {place.slug && (
+                          <p className="text-[11px] text-gray-400">{place.slug}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {place.category ? (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                              placeCategoryStyle[place.category] ||
+                              "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {placeCategoryLabels[place.category] || place.category}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {place.is_premium ? (
+                          <span className="text-amber-600">Sí</span>
+                        ) : (
+                          <span className="text-gray-400">No</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {place.region || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {place.country || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatCoords(place.latitude, place.longitude)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatDate(place.created_at)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link
+                            href={`/puntos-turisticos/editar/${place.id}`}
+                            className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                          >
+                            Editar
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClick(place)}
+                            disabled={deletingId === place.id}
+                            className="rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {deletingId === place.id ? "Eliminando..." : "Eliminar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <TablePagination
+              page={page}
+              total={total}
+              pageSize={ADMIN_TABLE_PAGE_SIZE}
+              loading={loading}
+              onPageChange={setPageNormalized}
+            />
           </div>
         )}
       </div>

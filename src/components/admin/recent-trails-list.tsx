@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
-import { api, type RecentTrail } from "@/lib/api";
+import type { RecentTrail } from "@/lib/api";
 import FadeIn from "@/components/admin/fade-in";
+import { useDashboardStats } from "@/contexts/dashboard-stats-context";
 
 const difficultyLabel: Record<string, string> = {
   easy: "Fácil",
@@ -18,28 +18,9 @@ const difficultyStyle: Record<string, string> = {
 };
 
 export default function RecentTrailsList() {
-  const [trails, setTrails] = useState<RecentTrail[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const s = await api.getDashboardStats();
-        if (cancelled) return;
-        setTrails(s.recent_trails ?? []);
-        setError(null);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Error al cargar senderos");
-          setTrails(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, loading, error } = useDashboardStats();
+  const trails: RecentTrail[] | null =
+    !loading && !error ? (data?.recent_trails ?? []) : null;
 
   const header = (
     <div className="flex items-center justify-between px-4 py-3">
@@ -73,7 +54,7 @@ export default function RecentTrailsList() {
       <FadeIn delay={0.36}>
         <div className="rounded-xl border border-[#EBEBEB] bg-white divide-y divide-[#F5F5F5]">
           {header}
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2].map((i) => (
             <div
               key={i}
               className="flex items-center justify-between px-4 py-3.5"

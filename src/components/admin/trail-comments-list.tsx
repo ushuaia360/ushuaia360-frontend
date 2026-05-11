@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
-import { api, type TrailCommentCount } from "@/lib/api";
+import type { TrailCommentCount } from "@/lib/api";
 import FadeIn from "@/components/admin/fade-in";
+import { useDashboardStats } from "@/contexts/dashboard-stats-context";
 
 const difficultyLabel: Record<string, string> = {
   easy: "Fácil",
@@ -18,30 +18,9 @@ const difficultyStyle: Record<string, string> = {
 };
 
 export default function TrailCommentsList() {
-  const [trails, setTrails] = useState<TrailCommentCount[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const s = await api.getDashboardStats();
-        if (cancelled) return;
-        setTrails(s.trail_comments ?? []);
-        setError(null);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setError(
-            e instanceof Error ? e.message : "Error al cargar comentarios"
-          );
-          setTrails(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, loading, error } = useDashboardStats();
+  const trails: TrailCommentCount[] | null =
+    !loading && !error ? (data?.trail_comments ?? []) : null;
 
   const header = (
     <div className="flex items-center justify-between px-4 py-3 border-b border-[#F5F5F5]">
@@ -74,7 +53,7 @@ export default function TrailCommentsList() {
         <div className="rounded-xl border border-[#EBEBEB] bg-white">
           {header}
           <div className="divide-y divide-[#F5F5F5]">
-            {[0, 1, 2, 3].map((i) => (
+            {[0, 1, 2].map((i) => (
               <div
                 key={i}
                 className="flex items-center justify-between px-4 py-3.5"

@@ -1,86 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Users, MapPin, MessageSquare, TrendingUp, type LucideIcon } from "lucide-react";
-import { api } from "@/lib/api";
+import { useMemo } from "react";
+import { Users, MapPin, MessageSquare, CheckCircle2, type LucideIcon } from "lucide-react";
 import AnimatedCounter from "@/components/admin/animated-counter";
 import FadeIn from "@/components/admin/fade-in";
-
-function formatDeltaVsPrevious(delta: number): string {
-  const safe = Math.max(0, delta);
-  if (safe === 0) return "0 vs mes anterior";
-  return `+${safe.toLocaleString("es-AR")} vs mes anterior`;
-}
-
-const VISITAS_PLACEHOLDER = {
-  label: "Visitas este mes",
-  value: 12847,
-  sub: "+24% vs mes anterior",
-  icon: TrendingUp,
-  accent: false,
-};
+import { useDashboardStats } from "@/contexts/dashboard-stats-context";
 
 type StatCard = {
   label: string;
   value: number;
-  sub: string;
   icon: LucideIcon;
   accent: boolean;
 };
 
 export default function DashboardStatsCards() {
-  const [cards, setCards] = useState<StatCard[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: stats, loading, error } = useDashboardStats();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const s = await api.getDashboardStats();
-        if (cancelled) return;
-        const built: StatCard[] = [
-          {
-            label: "Usuarios registrados",
-            value: s.users_total,
-            sub: formatDeltaVsPrevious(s.users_new_delta_vs_previous_month),
-            icon: Users,
-            accent: false,
-          },
-          {
-            label: "Senderos activos",
-            value: s.active_trails,
-            sub: `${s.trails_in_review.toLocaleString("es-AR")} en revisión`,
-            icon: MapPin,
-            accent: false,
-          },
-          {
-            label: "Comentarios",
-            value: s.comments_total,
-            sub: formatDeltaVsPrevious(s.comments_new_delta_vs_previous_month),
-            icon: MessageSquare,
-            accent: false,
-          },
-          {
-            label: VISITAS_PLACEHOLDER.label,
-            value: VISITAS_PLACEHOLDER.value,
-            sub: VISITAS_PLACEHOLDER.sub,
-            icon: VISITAS_PLACEHOLDER.icon,
-            accent: VISITAS_PLACEHOLDER.accent,
-          },
-        ];
-        setCards(built);
-        setError(null);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Error al cargar estadísticas");
-          setCards(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const cards = useMemo<StatCard[] | null>(() => {
+    if (!stats) return null;
+    return [
+      {
+        label: "Usuarios registrados",
+        value: stats.users_total,
+        icon: Users,
+        accent: false,
+      },
+      {
+        label: "Senderos activos",
+        value: stats.active_trails,
+        icon: MapPin,
+        accent: false,
+      },
+      {
+        label: "Comentarios",
+        value: stats.comments_total,
+        icon: MessageSquare,
+        accent: false,
+      },
+      {
+        label: "Senderos completados",
+        value: stats.trail_completions_total,
+        icon: CheckCircle2,
+        accent: false,
+      },
+    ];
+  }, [stats]);
 
   if (error) {
     return (
@@ -90,7 +54,7 @@ export default function DashboardStatsCards() {
     );
   }
 
-  if (!cards) {
+  if (loading || !cards) {
     return (
       <div className="grid grid-cols-4 gap-4">
         {[0, 1, 2, 3].map((i) => (
@@ -99,8 +63,7 @@ export default function DashboardStatsCards() {
             className="rounded-xl border border-[#EBEBEB] bg-white p-5 animate-pulse"
           >
             <div className="mb-4 h-3 w-24 rounded bg-gray-100" />
-            <div className="mb-2 h-8 w-20 rounded bg-gray-100" />
-            <div className="h-3 w-32 rounded bg-gray-50" />
+            <div className="h-8 w-20 rounded bg-gray-100" />
           </div>
         ))}
       </div>
@@ -109,13 +72,13 @@ export default function DashboardStatsCards() {
 
   return (
     <div className="grid grid-cols-4 gap-4">
-      {cards.map((s, i) => {
-        const Icon = s.icon;
+      {cards.map((card, i) => {
+        const Icon = card.icon;
         return (
-          <FadeIn key={s.label} delay={i * 0.08}>
+          <FadeIn key={card.label} delay={i * 0.08}>
             <div
               className={`rounded-xl border p-5 ${
-                s.accent
+                card.accent
                   ? "border-[#E65C00]/20 bg-[#FFFAF7]"
                   : "border-[#EBEBEB] bg-white"
               }`}
@@ -123,19 +86,19 @@ export default function DashboardStatsCards() {
               <div className="flex items-center justify-between mb-4">
                 <p
                   className={`text-xs font-light ${
-                    s.accent ? "text-[#E65C00]/70" : "text-gray-400"
+                    card.accent ? "text-[#E65C00]/70" : "text-gray-400"
                   }`}
                 >
-                  {s.label}
+                  {card.label}
                 </p>
                 <div
                   className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                    s.accent ? "bg-[#FFF0E6]" : "bg-[#EBF5FE]"
+                    card.accent ? "bg-[#FFF0E6]" : "bg-[#EBF5FE]"
                   }`}
                 >
                   <Icon
                     className={`h-3.5 w-3.5 ${
-                      s.accent ? "text-[#E65C00]" : "text-[#3FA9F5]"
+                      card.accent ? "text-[#E65C00]" : "text-[#3FA9F5]"
                     }`}
                     strokeWidth={1.75}
                   />
@@ -143,17 +106,10 @@ export default function DashboardStatsCards() {
               </div>
               <p
                 className={`text-3xl font-medium tracking-tight ${
-                  s.accent ? "text-[#E65C00]" : "text-gray-900"
+                  card.accent ? "text-[#E65C00]" : "text-gray-900"
                 }`}
               >
-                <AnimatedCounter target={s.value} />
-              </p>
-              <p
-                className={`mt-1.5 text-[11px] ${
-                  s.accent ? "text-[#E65C00]/70" : "text-gray-400"
-                }`}
-              >
-                {s.sub}
+                <AnimatedCounter target={card.value} />
               </p>
             </div>
           </FadeIn>
