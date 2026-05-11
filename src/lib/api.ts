@@ -1,5 +1,34 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
+export interface RecentTrail {
+  id: string;
+  slug: string;
+  name: string | null;
+  difficulty: string;
+  walks_count: number;
+}
+
+export interface TrailCommentCount {
+  id: string;
+  slug: string;
+  name: string | null;
+  difficulty: string;
+  comments_count: number;
+}
+
+export interface DashboardStats {
+  active_trails: number;
+  trails_in_review: number;
+  users_total: number;
+  users_new_current_month: number;
+  users_new_delta_vs_previous_month: number;
+  comments_total: number;
+  comments_new_current_month: number;
+  comments_new_delta_vs_previous_month: number;
+  recent_trails: RecentTrail[];
+  trail_comments: TrailCommentCount[];
+}
+
 async function getAuthToken(): Promise<string | null> {
   // Obtener el token de las cookies o localStorage
   if (typeof document !== 'undefined') {
@@ -313,5 +342,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  getDashboardStats: async () => {
+    return apiRequest<DashboardStats>('/admin/dashboard-stats');
   },
 };
