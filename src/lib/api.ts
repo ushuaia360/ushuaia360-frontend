@@ -199,6 +199,44 @@ export const api = {
     });
   },
 
+  // Trail Emergency Points
+  createTrailEmergencyPoint: async (trailId: string, data: {
+    name: string;
+    description?: string;
+    phone: string;
+    location: { longitude: number; latitude: number; elevation?: number };
+    order_index?: number;
+  }) => {
+    return apiRequest<{ message: string; emergency_point: any }>(
+      `/trails/${trailId}/emergency-points`,
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  },
+
+  updateTrailEmergencyPoint: async (
+    trailId: string,
+    pointId: string,
+    data: Partial<{
+      name: string;
+      description: string;
+      phone: string;
+      location: { longitude: number; latitude: number; elevation?: number };
+      order_index: number;
+    }>,
+  ) => {
+    return apiRequest<{ message: string; emergency_point: any }>(
+      `/trails/${trailId}/emergency-points/${pointId}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+    );
+  },
+
+  deleteTrailEmergencyPoint: async (trailId: string, pointId: string) => {
+    return apiRequest<{ message: string }>(
+      `/trails/${trailId}/emergency-points/${pointId}`,
+      { method: 'DELETE' },
+    );
+  },
+
   // Trail Media
   createTrailMedia: async (
     trailId: string,

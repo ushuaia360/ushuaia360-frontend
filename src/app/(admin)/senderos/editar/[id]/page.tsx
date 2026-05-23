@@ -38,6 +38,17 @@ interface PointOfInterest {
   photos: MediaFile[];
 }
 
+interface EmergencyPoint {
+  id: string;
+  name: string;
+  description: string;
+  phone: string;
+  location: [number, number] | null;
+  latText: string;
+  lngText: string;
+  order: number;
+}
+
 export default function EditarSenderoPage() {
   const router = useRouter();
   const params = useParams();
@@ -84,6 +95,9 @@ export default function EditarSenderoPage() {
   const [selectedPointPhoto, setSelectedPointPhoto] = useState<{ pointId: string; photoId: string } | null>(null);
   const [pointsOfInterest, setPointsOfInterest] = useState<PointOfInterest[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [emergencyPoints, setEmergencyPoints] = useState<EmergencyPoint[]>([]);
+  const [selectedEmergencyId, setSelectedEmergencyId] = useState<string | null>(null);
+  const [emergencyRemovedIds, setEmergencyRemovedIds] = useState<string[]>([]);
   const [isDrawingRoute, setIsDrawingRoute] = useState(false);
   const [isErasing, setIsErasing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,6 +279,30 @@ export default function EditarSenderoPage() {
           console.log("No points found or empty array");
           setPointsOfInterest([]);
         }
+
+        if (trail.emergency_points && Array.isArray(trail.emergency_points)) {
+          const loadedEmergency: EmergencyPoint[] = trail.emergency_points.map((ep: any, index: number) => {
+            let location: [number, number] | null = null;
+            if (ep.location && typeof ep.location === 'object') {
+              if (ep.location.latitude !== undefined && ep.location.longitude !== undefined) {
+                location = [ep.location.latitude, ep.location.longitude];
+              }
+            }
+            return {
+              id: ep.id || `emergency-${Date.now()}-${index}`,
+              name: ep.name || "",
+              description: ep.description || "",
+              phone: ep.phone || "",
+              location,
+              latText: location ? String(location[0]) : "",
+              lngText: location ? String(location[1]) : "",
+              order: ep.order_index !== undefined ? ep.order_index : index,
+            };
+          });
+          setEmergencyPoints(loadedEmergency);
+        } else {
+          setEmergencyPoints([]);
+        }
       } catch (err: any) {
         setSubmitError(err.message || "Error al cargar el sendero");
         console.error("Error loading trail:", err);
@@ -388,6 +426,7 @@ export default function EditarSenderoPage() {
     };
     setPointsOfInterest((prev) => [...prev, newPoint]);
     setSelectedPointId(newPoint.id);
+    setSelectedEmergencyId(null);
   };
 
   const updatePointOfInterest = (
@@ -414,6 +453,80 @@ export default function EditarSenderoPage() {
     setPointsOfInterest((prev) => prev.filter((p) => p.id !== id));
     if (selectedPointId === id) {
       setSelectedPointId(null);
+    }
+  };
+
+  const addEmergencyPoint = () => {
+    const newPoint: EmergencyPoint = {
+      id: `emergency-${Date.now()}`,
+      name: "",
+      description: "",
+      phone: "",
+      location: null,
+      latText: "",
+      lngText: "",
+      order: emergencyPoints.length,
+    };
+    setEmergencyPoints((prev) => [...prev, newPoint]);
+    setSelectedEmergencyId(newPoint.id);
+    setSelectedPointId(null);
+  };
+
+  const updateEmergencyPoint = (id: string, updates: Partial<EmergencyPoint>) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => (point.id === id ? { ...point, ...updates } : point)),
+    );
+  };
+
+  const syncEmergencyLocationFromText = (
+    latText: string,
+    lngText: string,
+  ): [number, number] | null => {
+    const latTrim = latText.trim();
+    const lngTrim = lngText.trim();
+    if (latTrim === "" || lngTrim === "") return null;
+    const lat = parseFloat(latTrim.replace(",", "."));
+    const lng = parseFloat(lngTrim.replace(",", "."));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return [lat, lng];
+  };
+
+  const updateEmergencyPointLatText = (id: string, latText: string) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => {
+        if (point.id !== id) return point;
+        const location = syncEmergencyLocationFromText(latText, point.lngText);
+        return { ...point, latText, location };
+      }),
+    );
+  };
+
+  const updateEmergencyPointLngText = (id: string, lngText: string) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => {
+        if (point.id !== id) return point;
+        const location = syncEmergencyLocationFromText(point.latText, lngText);
+        return { ...point, lngText, location };
+      }),
+    );
+  };
+
+  const applyEmergencyMapLocation = (id: string, location: [number, number]) => {
+    updateEmergencyPoint(id, {
+      location,
+      latText: String(location[0]),
+      lngText: String(location[1]),
+    });
+  };
+
+  const removeEmergencyPoint = (id: string) => {
+    if (isBackendPointId(id)) {
+      setEmergencyRemovedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    }
+    setEmergencyPoints((prev) => prev.filter((p) => p.id !== id));
+    if (selectedEmergencyId === id) {
+      setSelectedEmergencyId(null);
     }
   };
 
@@ -655,6 +768,14 @@ export default function EditarSenderoPage() {
                 }
               }
 
+              for (const removedEmergencyId of emergencyRemovedIds) {
+                try {
+                  await api.deleteTrailEmergencyPoint(trailId, removedEmergencyId);
+                } catch (err: any) {
+                  console.error("Error eliminando punto de emergencia:", err);
+                }
+              }
+
               // Subir solo los archivos nuevos del sendero (los existentes ya están en el backend)
               const newTrailMedia = mediaFiles.filter((m) => m.file);
               for (let i = 0; i < newTrailMedia.length; i++) {
@@ -741,6 +862,42 @@ export default function EditarSenderoPage() {
                     });
                   } catch (err: any) {
                     console.error(`Error subiendo foto del punto [${j}]:`, err);
+                  }
+                }
+              }
+
+              for (const ep of emergencyPoints) {
+                if (!ep.location || !ep.name.trim() || !ep.phone.trim()) continue;
+
+                const payload = {
+                  name: ep.name.trim(),
+                  description: ep.description?.trim() || undefined,
+                  phone: ep.phone.trim(),
+                  location: {
+                    longitude: ep.location[1],
+                    latitude: ep.location[0],
+                    elevation: 0,
+                  },
+                  order_index: ep.order,
+                };
+
+                if (isBackendPointId(ep.id)) {
+                  try {
+                    await api.updateTrailEmergencyPoint(trailId, ep.id, payload);
+                  } catch (err: any) {
+                    console.error("Error actualizando punto de emergencia:", err);
+                    setSubmitError(err?.message || "Error al actualizar un punto de emergencia");
+                    setIsSubmitting(false);
+                    return;
+                  }
+                } else {
+                  try {
+                    await api.createTrailEmergencyPoint(trailId, payload);
+                  } catch (err: any) {
+                    console.error("Error creando punto de emergencia:", err);
+                    setSubmitError(err?.message || "Error al crear un punto de emergencia");
+                    setIsSubmitting(false);
+                    return;
                   }
                 }
               }
@@ -990,11 +1147,30 @@ export default function EditarSenderoPage() {
                     setSelectedPointId(null);
                   }}
                   selectedPointId={selectedPointId}
+                  emergencyPoints={emergencyPoints.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    location: p.location,
+                  }))}
+                  onEmergencyLocationChange={(pointId, location) => {
+                    if (location) {
+                      applyEmergencyMapLocation(pointId, location);
+                    } else {
+                      updateEmergencyPoint(pointId, {
+                        location: null,
+                        latText: "",
+                        lngText: "",
+                      });
+                    }
+                    setSelectedEmergencyId(null);
+                  }}
+                  selectedEmergencyId={selectedEmergencyId}
                   isDrawingRoute={isDrawingRoute}
                   onDrawingRouteChange={(isDrawing) => {
                     setIsDrawingRoute(isDrawing);
                     if (isDrawing) {
                       setSelectedPointId(null);
+                      setSelectedEmergencyId(null);
                       setIsErasing(false);
                     }
                   }}
@@ -1004,6 +1180,7 @@ export default function EditarSenderoPage() {
                     if (isErasing) {
                       setIsDrawingRoute(false);
                       setSelectedPointId(null);
+                      setSelectedEmergencyId(null);
                     }
                   }}
                 />
@@ -1022,8 +1199,150 @@ export default function EditarSenderoPage() {
                     {pointsOfInterest.filter((p) => p.location).length} punto(s) de interés
                   </span>
                 )}
+                {emergencyPoints.filter((p) => p.location).length > 0 && (
+                  <span>
+                    {emergencyPoints.filter((p) => p.location).length} punto(s) de emergencia
+                  </span>
+                )}
               </div>
             </div>
+          </section>
+
+          {/* Puntos de Emergencia */}
+          <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Puntos de Emergencia
+                </h3>
+                <p className="mt-1 text-xs text-gray-400">
+                  Refugios, contactos de rescate o puntos seguros con teléfono para la app móvil
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addEmergencyPoint}
+                className="rounded-lg bg-[#E65C00] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#E65C00]/90"
+              >
+                + Agregar Punto
+              </button>
+            </div>
+
+            {emergencyPoints.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-[#EBEBEB] bg-gray-50 p-8 text-center">
+                <p className="text-sm text-gray-500">No hay puntos de emergencia</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Agregá refugios, guardaparques o números de contacto con ubicación exacta
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {emergencyPoints.map((point, index) => (
+                  <div
+                    key={point.id}
+                    className={`rounded-lg border-2 ${
+                      selectedEmergencyId === point.id
+                        ? "border-[#E65C00] bg-orange-50/30"
+                        : "border-[#EBEBEB] bg-white"
+                    } p-4 transition-colors`}
+                  >
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#E65C00] text-xs font-medium text-white">
+                            {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={point.name}
+                            onChange={(e) => updateEmergencyPoint(point.id, { name: e.target.value })}
+                            placeholder="Nombre del punto"
+                            className="flex-1 rounded-lg border border-[#EBEBEB] bg-white px-3 py-1.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                        <textarea
+                          value={point.description}
+                          onChange={(e) => updateEmergencyPoint(point.id, { description: e.target.value })}
+                          placeholder="Descripción (cómo llegar, horarios, etc.)"
+                          rows={2}
+                          className="mb-3 w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                        />
+                        <input
+                          type="tel"
+                          value={point.phone}
+                          onChange={(e) => updateEmergencyPoint(point.id, { phone: e.target.value })}
+                          placeholder="Teléfono / WhatsApp (ej. +54 9 2901 123456)"
+                          className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeEmergencyPoint(point.id)}
+                        className="ml-3 rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                        title="Eliminar punto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedEmergencyId === point.id) {
+                              setSelectedEmergencyId(null);
+                            } else {
+                              setSelectedEmergencyId(point.id);
+                              setSelectedPointId(null);
+                            }
+                          }}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            selectedEmergencyId === point.id
+                              ? "bg-[#E65C00] text-white"
+                              : "border border-[#EBEBEB] bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {selectedEmergencyId === point.id
+                            ? "Clic en el mapa…"
+                            : "Seleccionar en el mapa"}
+                        </button>
+                        <span className="text-xs text-gray-400">o ingresá coordenadas</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Latitud
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.latText}
+                            onChange={(e) => updateEmergencyPointLatText(point.id, e.target.value)}
+                            placeholder="-54.801900"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Longitud
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.lngText}
+                            onChange={(e) => updateEmergencyPointLngText(point.id, e.target.value)}
+                            placeholder="-68.303000"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Puntos de Interés en la Ruta */}

@@ -14,6 +14,13 @@ interface UnifiedMapComponentProps {
   }>;
   onPointLocationChange: (pointId: string, location: [number, number] | null) => void;
   selectedPointId: string | null;
+  emergencyPoints?: Array<{
+    id: string;
+    name: string;
+    location: [number, number] | null;
+  }>;
+  onEmergencyLocationChange?: (pointId: string, location: [number, number] | null) => void;
+  selectedEmergencyId?: string | null;
   isDrawingRoute: boolean;
   onDrawingRouteChange: (isDrawing: boolean) => void;
   isErasing: boolean;
@@ -28,6 +35,9 @@ export default function UnifiedMapComponent({
   pointsOfInterest,
   onPointLocationChange,
   selectedPointId,
+  emergencyPoints = [],
+  onEmergencyLocationChange,
+  selectedEmergencyId = null,
   isDrawingRoute,
   onDrawingRouteChange,
   isErasing,
@@ -43,11 +53,13 @@ export default function UnifiedMapComponent({
   const routePolylineRef = useRef<any>(null);
   const routeMarkersRef = useRef<any[]>([]);
   const poiMarkersRef = useRef<any[]>([]);
+  const emergencyMarkersRef = useRef<any[]>([]);
   
   // Estados para mostrar/ocultar capas
   const [showMainPoint, setShowMainPoint] = useState(true);
   const [showRoute, setShowRoute] = useState(true);
   const [showPointsOfInterest, setShowPointsOfInterest] = useState(true);
+  const [showEmergencyPoints, setShowEmergencyPoints] = useState(true);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -304,6 +316,8 @@ export default function UnifiedMapComponent({
         // Agregar punto a la ruta [lat, lng]
         const newSegments: [number, number][] = [...routeSegments, [lat, lng] as [number, number]];
         onRouteSegmentsChange(newSegments);
+      } else if (selectedEmergencyId && onEmergencyLocationChange) {
+        onEmergencyLocationChange(selectedEmergencyId, [lat, lng]);
       } else if (selectedPointId) {
         // Actualizar ubicación del punto de interés seleccionado [lat, lng]
         onPointLocationChange(selectedPointId, [lat, lng]);
@@ -314,7 +328,7 @@ export default function UnifiedMapComponent({
     };
 
     mapInstanceRef.current.on("click", handleMapClick);
-  }, [isDrawingRoute, selectedPointId, isErasing, routeSegments, onRouteSegmentsChange, onPointLocationChange, onMapPointChange]);
+  }, [isDrawingRoute, selectedPointId, selectedEmergencyId, isErasing, routeSegments, onRouteSegmentsChange, onPointLocationChange, onEmergencyLocationChange, onMapPointChange]);
 
   // Actualizar punto principal
   useEffect(() => {
@@ -660,6 +674,75 @@ export default function UnifiedMapComponent({
     };
   }, [pointsOfInterest, showPointsOfInterest, onPointLocationChange]);
 
+  // Actualizar puntos de emergencia
+  useEffect(() => {
+    if (!mapInstanceRef.current || !showEmergencyPoints || !onEmergencyLocationChange) {
+      emergencyMarkersRef.current.forEach((m) => {
+        try {
+          mapInstanceRef.current?.removeLayer(m);
+        } catch (e) {
+          // Ignorar
+        }
+      });
+      emergencyMarkersRef.current = [];
+      return;
+    }
+
+    const updateEmergency = () => {
+      try {
+        const L = (window as any).L;
+        if (!L) {
+          setTimeout(updateEmergency, 100);
+          return;
+        }
+
+        emergencyMarkersRef.current.forEach((m) => {
+          try {
+            mapInstanceRef.current.removeLayer(m);
+          } catch (e) {
+            // Ignorar
+          }
+        });
+        emergencyMarkersRef.current = [];
+
+        emergencyPoints
+          .filter((ep) => ep.location && Array.isArray(ep.location) && ep.location.length >= 2)
+          .forEach((ep) => {
+            try {
+              const [lat, lng] = ep.location!;
+              const marker = L.marker([lat, lng], {
+                draggable: true,
+                icon: L.icon({
+                  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+                  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                  iconSize: [25, 41],
+                  iconAnchor: [12, 41],
+                  popupAnchor: [1, -34],
+                  shadowSize: [41, 41],
+                }),
+              }).addTo(mapInstanceRef.current);
+
+              marker.bindPopup(ep.name || "Punto de emergencia");
+              marker.on("dragend", (e: any) => {
+                const latlng = e.target.getLatLng();
+                onEmergencyLocationChange(ep.id, [latlng.lat, latlng.lng]);
+              });
+
+              emergencyMarkersRef.current.push(marker);
+            } catch (err) {
+              console.error("Error creating emergency marker:", err, ep);
+            }
+          });
+      } catch (err) {
+        console.error("Error updating emergency points:", err);
+      }
+    };
+
+    updateEmergency();
+    const timeoutId = setTimeout(updateEmergency, 100);
+    return () => clearTimeout(timeoutId);
+  }, [emergencyPoints, showEmergencyPoints, onEmergencyLocationChange]);
+
   return (
     <div className="relative h-full w-full">
       <div ref={mapRef} className="h-full w-full" />
@@ -697,6 +780,18 @@ export default function UnifiedMapComponent({
               />
               <span className="font-medium text-gray-700">Puntos de Interés</span>
             </label>
+
+            {emergencyPoints.length > 0 && (
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={showEmergencyPoints}
+                  onChange={(e) => setShowEmergencyPoints(e.target.checked)}
+                  className="h-3 w-3 rounded border-[#EBEBEB] text-[#E65C00]"
+                />
+                <span className="font-medium text-gray-700">Emergencia</span>
+              </label>
+            )}
           </div>
         </div>
 
