@@ -13,6 +13,7 @@ import {
   LogOut,
   Mountain,
   Landmark,
+  Crown,
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
@@ -20,6 +21,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/a
 const nav = [
   { href: "/", label: "Home", icon: House },
   { href: "/usuarios", label: "Usuarios", icon: Users },
+  { href: "/suscripciones-premium", label: "Premium", icon: Crown },
   { href: "/senderos", label: "Senderos", icon: MapPin },
   { href: "/puntos-turisticos", label: "Puntos Turísticos", icon: Landmark },
   { href: "/comentarios", label: "Comentarios", icon: MessageSquare },

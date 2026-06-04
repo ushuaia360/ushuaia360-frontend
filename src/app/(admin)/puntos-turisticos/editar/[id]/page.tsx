@@ -49,6 +49,7 @@ export default function EditarPuntoTuristicoPage() {
     description: "",
     category: "" as PlaceCategorySlug | "",
     is_premium: false,
+    contact_link: "",
     region: "Tierra del Fuego",
     country: "Argentina",
   });
@@ -81,6 +82,7 @@ export default function EditarPuntoTuristicoPage() {
           description: place.description || "",
           category: (place.category as PlaceCategorySlug) || "",
           is_premium: Boolean(place.is_premium),
+          contact_link: place.contact_link || "",
           region: place.region || "Tierra del Fuego",
           country: place.country || "Argentina",
         });
@@ -270,6 +272,7 @@ export default function EditarPuntoTuristicoPage() {
               await api.updatePlace(placeId, {
                 name: formData.name.trim(),
                 description: formData.description,
+                contact_link: formData.contact_link.trim() || null,
                 slug: slugFromName || undefined,
                 category: formData.category,
                 is_premium: formData.is_premium,
@@ -350,6 +353,23 @@ export default function EditarPuntoTuristicoPage() {
                     rows={5}
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Link de contacto
+                  </label>
+                  <input
+                    type="text"
+                    name="contact_link"
+                    value={formData.contact_link}
+                    onChange={handleInputChange}
+                    placeholder="https://..., @instagram, +54 9..."
+                    className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Opcional. Teléfono, WhatsApp, red social o web. Se muestra en el detalle de la app.
+                  </p>
                 </div>
               </div>
             </section>

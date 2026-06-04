@@ -72,6 +72,7 @@ export default function EditarSenderoPage() {
     duration_minutes: "",
     is_featured: false,
     is_premium: false,
+    contact_link: "",
     status_id: "",
   });
 
@@ -133,6 +134,7 @@ export default function EditarSenderoPage() {
           duration_minutes: trail.duration_minutes?.toString() || "",
           is_featured: trail.is_featured || false,
           is_premium: trail.is_premium || false,
+          contact_link: trail.contact_link || "",
           status_id: trail.status_id?.toString() || "",
         });
 
@@ -685,6 +687,7 @@ export default function EditarSenderoPage() {
               if (formData.difficulty) trailData.difficulty = formData.difficulty;
               if (formData.route_type) trailData.route_type = formData.route_type;
               if (formData.description) trailData.description = formData.description;
+              trailData.contact_link = formData.contact_link.trim() || null;
               if (formData.region) trailData.region = formData.region;
               if (formData.distance_km) trailData.distance_km = parseFloat(formData.distance_km);
               if (formData.elevation_gain) trailData.elevation_gain = parseInt(formData.elevation_gain);
@@ -965,6 +968,23 @@ export default function EditarSenderoPage() {
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Link de contacto
+                  </label>
+                  <input
+                    type="text"
+                    name="contact_link"
+                    value={formData.contact_link}
+                    onChange={handleInputChange}
+                    placeholder="https://..., @instagram, +54 9..."
+                    className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Opcional. Teléfono, WhatsApp, red social o web. Se muestra en el detalle de la app.
+                  </p>
                 </div>
               </div>
             </section>

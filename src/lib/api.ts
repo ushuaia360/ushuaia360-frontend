@@ -377,6 +377,7 @@ export const api = {
     search?: string;
     role?: 'admin' | 'user';
     suspended?: boolean;
+    premium?: boolean;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.limit != null) queryParams.append('limit', params.limit.toString());
@@ -388,6 +389,8 @@ export const api = {
     }
     if (params?.suspended === true) queryParams.append('suspended', 'true');
     if (params?.suspended === false) queryParams.append('suspended', 'false');
+    if (params?.premium === true) queryParams.append('premium', 'true');
+    if (params?.premium === false) queryParams.append('premium', 'false');
 
     const query = queryParams.toString();
     return apiRequest<{

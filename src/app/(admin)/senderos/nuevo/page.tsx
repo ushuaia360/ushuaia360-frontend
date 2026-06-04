@@ -55,6 +55,7 @@ export default function NuevoSenderoPage() {
     duration_minutes: "",
     is_featured: false,
     is_premium: false,
+    contact_link: "",
     status_id: "",
   });
 
@@ -329,6 +330,7 @@ export default function NuevoSenderoPage() {
               if (formData.duration_minutes) trailData.duration_minutes = parseInt(formData.duration_minutes);
               if (formData.is_featured) trailData.is_featured = formData.is_featured;
               if (formData.is_premium) trailData.is_premium = formData.is_premium;
+              if (formData.contact_link.trim()) trailData.contact_link = formData.contact_link.trim();
               if (!formData.status_id) {
                 setSubmitError("El campo Estado es obligatorio");
                 setIsSubmitting(false);
@@ -492,6 +494,23 @@ export default function NuevoSenderoPage() {
                     onChange={handleInputChange}
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Link de contacto
+                  </label>
+                  <input
+                    type="text"
+                    name="contact_link"
+                    value={formData.contact_link}
+                    onChange={handleInputChange}
+                    placeholder="https://..., @instagram, +54 9..."
+                    className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Opcional. Teléfono, WhatsApp, red social o web. Se muestra en el detalle de la app.
+                  </p>
                 </div>
               </div>
             </section>
