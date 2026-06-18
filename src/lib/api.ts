@@ -418,4 +418,43 @@ export const api = {
   getDashboardStats: async () => {
     return apiRequest<DashboardStats>('/admin/dashboard-stats');
   },
+
+  // Reports (Reportes)
+  getReports: async (params?: {
+    status?: 'pending' | 'reviewed' | 'dismissed' | 'all';
+    target_type?: 'trail' | 'place' | 'review';
+    limit?: number;
+    offset?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.target_type) queryParams.append('target_type', params.target_type);
+    if (params?.limit != null) queryParams.append('limit', params.limit.toString());
+    if (params?.offset != null) queryParams.append('offset', params.offset.toString());
+    const query = queryParams.toString();
+    return apiRequest<{
+      reports: Array<{
+        id: string;
+        target_type: 'trail' | 'place' | 'review';
+        target_id: string;
+        target_name: string | null;
+        reason: string;
+        status: 'pending' | 'reviewed' | 'dismissed';
+        context_id: string | null;
+        created_at: string;
+        reporter_name: string | null;
+        reporter_email: string | null;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/admin/reports${query ? `?${query}` : ''}`);
+  },
+
+  updateReportStatus: async (reportId: string, status: 'pending' | 'reviewed' | 'dismissed') => {
+    return apiRequest<{ message: string; status: string }>(`/admin/reports/${reportId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  },
 };

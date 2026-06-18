@@ -14,6 +14,7 @@ import {
   Mountain,
   Landmark,
   Crown,
+  Flag,
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
@@ -25,6 +26,7 @@ const nav = [
   { href: "/senderos", label: "Senderos", icon: MapPin },
   { href: "/puntos-turisticos", label: "Puntos Turísticos", icon: Landmark },
   { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
+  { href: "/reportes", label: "Reportes", icon: Flag },
 ];
 
 interface User {
