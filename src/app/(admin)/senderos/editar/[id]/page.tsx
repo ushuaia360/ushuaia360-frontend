@@ -729,6 +729,7 @@ export default function EditarSenderoPage() {
                     await api.deleteAllRouteSegments(trailId, routeId);
                   }
                   const path = routeSegments.map((segment) => [segment[1], segment[0]]);
+                  if (!routeId) throw new Error("routeId is null");
                   await api.createRouteSegment(trailId, routeId, {
                     path,
                     segment_order: 1,
