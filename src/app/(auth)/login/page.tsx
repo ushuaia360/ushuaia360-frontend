@@ -53,10 +53,13 @@ export default function LoginPage() {
         return;
       }
 
+      // Guardar token y datos de usuario para evitar dependencia de cookies cross-origin
+      localStorage.setItem("admin_token", data.token);
+      localStorage.setItem("admin_user", JSON.stringify(data.user));
+
       // Redirigir al admin o a la URL de destino
       const redirectTo = getRedirectUrl();
       router.push(redirectTo);
-      router.refresh();
     } catch (err: any) {
       setError("Error al conectar con el servidor");
       setLoading(false);

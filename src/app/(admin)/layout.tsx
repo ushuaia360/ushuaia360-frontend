@@ -19,22 +19,29 @@ export default function AdminLayout({
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        const token = localStorage.getItem("admin_token");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
         const response = await fetch(`${API_BASE_URL}/auth/me`, {
           method: "GET",
-          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (!response.ok) {
-          // No autenticado o token inválido
+          localStorage.removeItem("admin_token");
+          localStorage.removeItem("admin_user");
           router.push("/login");
           return;
         }
 
         const data = await response.json();
-        
-        // Verificar que el usuario sea admin
+
         if (!data.user?.is_admin) {
-          // No es admin, redirigir al login
+          localStorage.removeItem("admin_token");
+          localStorage.removeItem("admin_user");
           router.push("/login");
           return;
         }
