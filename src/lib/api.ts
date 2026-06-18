@@ -348,6 +348,7 @@ export const api = {
       category?: string;
       region?: string;
       country?: string;
+      contact_link?: string | null;
       location?: { latitude: number; longitude: number };
       is_premium?: boolean;
     }
