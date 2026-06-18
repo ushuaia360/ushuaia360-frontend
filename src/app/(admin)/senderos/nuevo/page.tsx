@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
 import { uploadFile } from "@/lib/supabaseClient";
 import { compressToWebp, isAllowed } from "@/lib/image";
+import { extractGpsFromFile } from "@/lib/exif";
 
 // Componente de mapa dinámico para evitar problemas de SSR
 const UnifiedMapComponent = dynamic(() => import("./UnifiedMapComponent"), { ssr: false });
@@ -31,9 +32,22 @@ interface PointOfInterest {
   description: string;
   type: PointOfInterestType;
   location: [number, number] | null; // [lat, lng]
+  latText: string;
+  lngText: string;
   km_marker: string;
   order: number;
   photos: MediaFile[];
+}
+
+interface EmergencyPoint {
+  id: string;
+  name: string;
+  description: string;
+  phone: string;
+  location: [number, number] | null;
+  latText: string;
+  lngText: string;
+  order: number;
 }
 
 export default function NuevoSenderoPage() {
@@ -70,12 +84,16 @@ export default function NuevoSenderoPage() {
   };
 
   const [mapPoint, setMapPoint] = useState<[number, number] | null>(null);
+  const [mapPointLatText, setMapPointLatText] = useState("");
+  const [mapPointLngText, setMapPointLngText] = useState("");
   const [routeSegments, setRouteSegments] = useState<[number, number][]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
   const [selectedPointPhoto, setSelectedPointPhoto] = useState<{ pointId: string; photoId: string } | null>(null);
   const [pointsOfInterest, setPointsOfInterest] = useState<PointOfInterest[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [emergencyPoints, setEmergencyPoints] = useState<EmergencyPoint[]>([]);
+  const [selectedEmergencyId, setSelectedEmergencyId] = useState<string | null>(null);
   const [isDrawingRoute, setIsDrawingRoute] = useState(false);
   const [isErasing, setIsErasing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +120,7 @@ export default function NuevoSenderoPage() {
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const newMedia: MediaFile[] = files.map((file, index) => {
       const mediaType = determineMediaType(file);
@@ -115,6 +133,18 @@ export default function NuevoSenderoPage() {
       };
     });
     setMediaFiles((prev) => [...prev, ...newMedia]);
+
+    if (!mapPoint) {
+      const firstImage = files.find((f) => f.type.startsWith("image/"));
+      if (firstImage) {
+        const gps = await extractGpsFromFile(firstImage);
+        if (gps) {
+          setMapPoint(gps);
+          setMapPointLatText(String(gps[0]));
+          setMapPointLngText(String(gps[1]));
+        }
+      }
+    }
   };
 
   const determineMediaType = (file: File): MediaType => {
@@ -191,6 +221,8 @@ export default function NuevoSenderoPage() {
       description: "",
       type: "mirador",
       location: null,
+      latText: "",
+      lngText: "",
       km_marker: "",
       order: pointsOfInterest.length,
       photos: [],
@@ -224,7 +256,115 @@ export default function NuevoSenderoPage() {
     }
   };
 
-  const handlePointPhotoUpload = (
+  const syncLocationFromText = (latText: string, lngText: string): [number, number] | null => {
+    const lat = parseFloat(latText.trim().replace(",", "."));
+    const lng = parseFloat(lngText.trim().replace(",", "."));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return [lat, lng];
+  };
+
+  const updatePointOfInterestLatText = (id: string, latText: string) => {
+    setPointsOfInterest((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const location = syncLocationFromText(latText, p.lngText);
+        return { ...p, latText, location };
+      }),
+    );
+  };
+
+  const updatePointOfInterestLngText = (id: string, lngText: string) => {
+    setPointsOfInterest((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const location = syncLocationFromText(p.latText, lngText);
+        return { ...p, lngText, location };
+      }),
+    );
+  };
+
+  const handleMapPointLatText = (latText: string) => {
+    setMapPointLatText(latText);
+    const location = syncLocationFromText(latText, mapPointLngText);
+    if (location) setMapPoint(location);
+  };
+
+  const handleMapPointLngText = (lngText: string) => {
+    setMapPointLngText(lngText);
+    const location = syncLocationFromText(mapPointLatText, lngText);
+    if (location) setMapPoint(location);
+  };
+
+  const addEmergencyPoint = () => {
+    const newPoint: EmergencyPoint = {
+      id: `emergency-${Date.now()}`,
+      name: "",
+      description: "",
+      phone: "",
+      location: null,
+      latText: "",
+      lngText: "",
+      order: emergencyPoints.length,
+    };
+    setEmergencyPoints((prev) => [...prev, newPoint]);
+    setSelectedEmergencyId(newPoint.id);
+    setSelectedPointId(null);
+  };
+
+  const updateEmergencyPoint = (id: string, updates: Partial<EmergencyPoint>) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => (point.id === id ? { ...point, ...updates } : point)),
+    );
+  };
+
+  const syncEmergencyLocationFromText = (latText: string, lngText: string): [number, number] | null => {
+    const latTrim = latText.trim();
+    const lngTrim = lngText.trim();
+    if (latTrim === "" || lngTrim === "") return null;
+    const lat = parseFloat(latTrim.replace(",", "."));
+    const lng = parseFloat(lngTrim.replace(",", "."));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return [lat, lng];
+  };
+
+  const updateEmergencyPointLatText = (id: string, latText: string) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => {
+        if (point.id !== id) return point;
+        const location = syncEmergencyLocationFromText(latText, point.lngText);
+        return { ...point, latText, location };
+      }),
+    );
+  };
+
+  const updateEmergencyPointLngText = (id: string, lngText: string) => {
+    setEmergencyPoints((prev) =>
+      prev.map((point) => {
+        if (point.id !== id) return point;
+        const location = syncEmergencyLocationFromText(point.latText, lngText);
+        return { ...point, lngText, location };
+      }),
+    );
+  };
+
+  const applyEmergencyMapLocation = (id: string, location: [number, number]) => {
+    updateEmergencyPoint(id, {
+      location,
+      latText: String(location[0]),
+      lngText: String(location[1]),
+    });
+  };
+
+  const removeEmergencyPoint = (id: string) => {
+    setEmergencyPoints((prev) => prev.filter((p) => p.id !== id));
+    if (selectedEmergencyId === id) {
+      setSelectedEmergencyId(null);
+    }
+  };
+
+  const handlePointPhotoUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     pointId: string
   ) => {
@@ -243,15 +383,28 @@ export default function NuevoSenderoPage() {
     setPointsOfInterest((prev) =>
       prev.map((point) =>
         point.id === pointId
-          ? {
-              ...point,
-              photos: [...point.photos, ...newPhotos],
-            }
+          ? { ...point, photos: [...point.photos, ...newPhotos] }
           : point
       )
     );
-    
-    // Limpiar el input
+
+    const point = pointsOfInterest.find((p) => p.id === pointId);
+    if (!point?.location) {
+      const firstImage = files.find((f) => f.type.startsWith("image/"));
+      if (firstImage) {
+        const gps = await extractGpsFromFile(firstImage);
+        if (gps) {
+          setPointsOfInterest((prev) =>
+            prev.map((p) =>
+              p.id === pointId
+                ? { ...p, location: gps, latText: String(gps[0]), lngText: String(gps[1]) }
+                : p
+            )
+          );
+        }
+      }
+    }
+
     e.target.value = "";
   };
 
@@ -428,6 +581,26 @@ export default function NuevoSenderoPage() {
                   } catch (err: any) {
                     console.error("Error creating trail point:", err);
                   }
+                }
+              }
+
+              // 5. Crear puntos de emergencia
+              for (const ep of emergencyPoints) {
+                if (!ep.location || !ep.name.trim() || !ep.phone.trim()) continue;
+                try {
+                  await api.createTrailEmergencyPoint(trailId, {
+                    name: ep.name.trim(),
+                    description: ep.description?.trim() || undefined,
+                    phone: ep.phone.trim(),
+                    location: {
+                      longitude: ep.location[1],
+                      latitude: ep.location[0],
+                      elevation: 0,
+                    },
+                    order_index: ep.order,
+                  });
+                } catch (err: any) {
+                  console.error("Error creando punto de emergencia:", err);
                 }
               }
 
@@ -679,7 +852,13 @@ export default function NuevoSenderoPage() {
               <div className="h-[600px] rounded-lg overflow-hidden border border-[#EBEBEB]">
                 <UnifiedMapComponent
                   mapPoint={mapPoint}
-                  onMapPointChange={setMapPoint}
+                  onMapPointChange={(pt) => {
+                    setMapPoint(pt);
+                    if (pt) {
+                      setMapPointLatText(String(pt[0]));
+                      setMapPointLngText(String(pt[1]));
+                    }
+                  }}
                   routeSegments={routeSegments}
                   onRouteSegmentsChange={setRouteSegments}
                   pointsOfInterest={pointsOfInterest.map((p) => ({
@@ -688,47 +867,232 @@ export default function NuevoSenderoPage() {
                     location: p.location,
                   }))}
                   onPointLocationChange={(pointId, location) => {
-                    updatePointOfInterest(pointId, { location });
-                    // Deseleccionar después de ubicar
+                    updatePointOfInterest(pointId, {
+                      location,
+                      latText: location ? String(location[0]) : "",
+                      lngText: location ? String(location[1]) : "",
+                    });
                     setSelectedPointId(null);
                   }}
                   selectedPointId={selectedPointId}
+                  emergencyPoints={emergencyPoints.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    location: p.location,
+                  }))}
+                  onEmergencyLocationChange={(pointId, location) => {
+                    if (location) {
+                      applyEmergencyMapLocation(pointId, location);
+                    } else {
+                      updateEmergencyPoint(pointId, { location: null, latText: "", lngText: "" });
+                    }
+                    setSelectedEmergencyId(null);
+                  }}
+                  selectedEmergencyId={selectedEmergencyId}
                   isDrawingRoute={isDrawingRoute}
                   onDrawingRouteChange={(isDrawing) => {
                     setIsDrawingRoute(isDrawing);
-                    // Si se activa dibujo de ruta, deseleccionar punto de interés y desactivar borrar
                     if (isDrawing) {
                       setSelectedPointId(null);
+                      setSelectedEmergencyId(null);
                       setIsErasing(false);
                     }
                   }}
                   isErasing={isErasing}
                   onErasingChange={(isErasing) => {
                     setIsErasing(isErasing);
-                    // Si se activa borrar, desactivar dibujo y deseleccionar punto de interés
                     if (isErasing) {
                       setIsDrawingRoute(false);
                       setSelectedPointId(null);
+                      setSelectedEmergencyId(null);
                     }
                   }}
                 />
               </div>
-              <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-                {mapPoint && (
-                  <span>
-                    Punto principal: {mapPoint[0].toFixed(6)} (lat), {mapPoint[1].toFixed(6)} (lng)
-                  </span>
-                )}
-                {routeSegments.length > 0 && (
-                  <span>{routeSegments.length} punto(s) en la ruta</span>
-                )}
-                {pointsOfInterest.filter((p) => p.location).length > 0 && (
-                  <span>
-                    {pointsOfInterest.filter((p) => p.location).length} punto(s) de interés
-                  </span>
-                )}
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                  {routeSegments.length > 0 && (
+                    <span>{routeSegments.length} punto(s) en la ruta</span>
+                  )}
+                  {pointsOfInterest.filter((p) => p.location).length > 0 && (
+                    <span>
+                      {pointsOfInterest.filter((p) => p.location).length} punto(s) de interés
+                    </span>
+                  )}
+                  {emergencyPoints.filter((p) => p.location).length > 0 && (
+                    <span>
+                      {emergencyPoints.filter((p) => p.location).length} punto(s) de emergencia
+                    </span>
+                  )}
+                </div>
+                <div className="border-t border-[#EBEBEB] pt-3">
+                  <p className="mb-2 text-xs font-medium text-gray-600">
+                    Punto principal — clic en el mapa o ingresá coordenadas:
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-500">Latitud</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={mapPointLatText}
+                        onChange={(e) => handleMapPointLatText(e.target.value)}
+                        placeholder="-54.801900"
+                        className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-500">Longitud</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={mapPointLngText}
+                        onChange={(e) => handleMapPointLngText(e.target.value)}
+                        placeholder="-68.303000"
+                        className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+          </section>
+
+          {/* Puntos de Emergencia */}
+          <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Puntos de Emergencia
+                </h3>
+                <p className="mt-1 text-xs text-gray-400">
+                  Refugios, contactos de rescate o puntos seguros con teléfono para la app móvil
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addEmergencyPoint}
+                className="rounded-lg bg-[#E65C00] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#E65C00]/90"
+              >
+                + Agregar Punto
+              </button>
+            </div>
+
+            {emergencyPoints.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-[#EBEBEB] bg-gray-50 p-8 text-center">
+                <p className="text-sm text-gray-500">No hay puntos de emergencia</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Agregá refugios, guardaparques o números de contacto con ubicación exacta
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {emergencyPoints.map((point, index) => (
+                  <div
+                    key={point.id}
+                    className={`rounded-lg border-2 ${
+                      selectedEmergencyId === point.id
+                        ? "border-[#E65C00] bg-orange-50/30"
+                        : "border-[#EBEBEB] bg-white"
+                    } p-4 transition-colors`}
+                  >
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#E65C00] text-xs font-medium text-white">
+                            {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={point.name}
+                            onChange={(e) => updateEmergencyPoint(point.id, { name: e.target.value })}
+                            placeholder="Nombre del punto"
+                            className="flex-1 rounded-lg border border-[#EBEBEB] bg-white px-3 py-1.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                        <textarea
+                          value={point.description}
+                          onChange={(e) => updateEmergencyPoint(point.id, { description: e.target.value })}
+                          placeholder="Descripción (cómo llegar, horarios, etc.)"
+                          rows={2}
+                          className="mb-3 w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                        />
+                        <input
+                          type="tel"
+                          value={point.phone}
+                          onChange={(e) => updateEmergencyPoint(point.id, { phone: e.target.value })}
+                          placeholder="Teléfono / WhatsApp (ej. +54 9 2901 123456)"
+                          className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeEmergencyPoint(point.id)}
+                        className="ml-3 rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                        title="Eliminar punto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedEmergencyId === point.id) {
+                              setSelectedEmergencyId(null);
+                            } else {
+                              setSelectedEmergencyId(point.id);
+                              setSelectedPointId(null);
+                            }
+                          }}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            selectedEmergencyId === point.id
+                              ? "bg-[#E65C00] text-white"
+                              : "border border-[#EBEBEB] bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {selectedEmergencyId === point.id
+                            ? "Clic en el mapa…"
+                            : "Seleccionar en el mapa"}
+                        </button>
+                        <span className="text-xs text-gray-400">o ingresá coordenadas</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Latitud
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.latText}
+                            onChange={(e) => updateEmergencyPointLatText(point.id, e.target.value)}
+                            placeholder="-54.801900"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Longitud
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.lngText}
+                            onChange={(e) => updateEmergencyPointLngText(point.id, e.target.value)}
+                            placeholder="-68.303000"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#E65C00] focus:ring-2 focus:ring-[#E65C00]/10"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Puntos de Interés en la Ruta */}
@@ -870,22 +1234,18 @@ export default function NuevoSenderoPage() {
                     </div>
 
                     {/* Ubicación del punto */}
-                    <div className="mt-4">
-                      <label className="mb-1.5 block text-xs font-medium text-gray-700">
-                        Ubicación en el Mapa
-                      </label>
-                      <div className="flex items-center gap-2">
+                    <div className="mt-4 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            // Si ya está seleccionado, deseleccionar
                             if (selectedPointId === point.id) {
                               setSelectedPointId(null);
                             } else {
-                              // Seleccionar este punto y desactivar dibujo de ruta
                               setSelectedPointId(point.id);
+                              setSelectedEmergencyId(null);
                               setIsDrawingRoute(false);
                             }
                           }}
@@ -895,21 +1255,38 @@ export default function NuevoSenderoPage() {
                               : "border border-[#EBEBEB] bg-white text-gray-700 hover:bg-gray-50"
                           }`}
                         >
-                          {point.location
+                          {selectedPointId === point.id
+                            ? "Clic en el mapa…"
+                            : point.location
                             ? "Cambiar Ubicación"
                             : "Seleccionar en Mapa"}
                         </button>
-                        {point.location && (
-                          <span className="text-xs text-gray-600">
-                            {point.location[0].toFixed(6)} (lat), {point.location[1].toFixed(6)} (lng)
-                          </span>
-                        )}
+                        <span className="text-xs text-gray-400">o ingresá coordenadas</span>
                       </div>
-                      {selectedPointId === point.id && (
-                        <p className="mt-2 text-xs text-gray-500">
-                          Haz clic en el mapa principal para ubicar este punto
-                        </p>
-                      )}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">Latitud</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.latText}
+                            onChange={(e) => updatePointOfInterestLatText(point.id, e.target.value)}
+                            placeholder="-54.801900"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">Longitud</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={point.lngText}
+                            onChange={(e) => updatePointOfInterestLngText(point.id, e.target.value)}
+                            placeholder="-68.303000"
+                            className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Fotos del punto */}

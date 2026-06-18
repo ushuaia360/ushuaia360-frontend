@@ -258,6 +258,13 @@ export const api = {
     });
   },
 
+  updateTrailMedia: async (trailId: string, mediaId: string, data: { media_type?: string; order_index?: number }) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/media/${mediaId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Trail Point Media
   createTrailPointMedia: async (
     trailId: string,
