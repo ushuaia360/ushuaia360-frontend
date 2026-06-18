@@ -59,7 +59,8 @@ export default function LoginPage() {
 
       // Redirigir al admin o a la URL de destino
       const redirectTo = getRedirectUrl();
-      router.push(redirectTo);
+      router.push(redirectTo.startsWith("/") ? redirectTo : "/");
+      setLoading(false);
     } catch (err: any) {
       setError("Error al conectar con el servidor");
       setLoading(false);
