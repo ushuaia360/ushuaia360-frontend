@@ -281,6 +281,13 @@ export const api = {
     return apiRequest<{ media: any[] }>(`/trails/${trailId}/points/${pointId}/media`);
   },
 
+  updateTrailPointMedia: async (trailId: string, pointId: string, mediaId: string, data: { media_type?: string; order_index?: number }) => {
+    return apiRequest<{ message: string }>(`/trails/${trailId}/points/${pointId}/media/${mediaId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   deleteTrailPointMedia: async (trailId: string, pointId: string, mediaId: string) => {
     return apiRequest<{ message: string }>(`/trails/${trailId}/points/${pointId}/media/${mediaId}`, {
       method: 'DELETE',

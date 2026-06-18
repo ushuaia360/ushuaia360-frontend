@@ -937,7 +937,17 @@ export default function EditarSenderoPage() {
                   }
                 }
 
-                // Subir fotos/videos del punto (solo los que tienen File adjunto)
+                // Actualizar tipo de fotos existentes del punto que cambiaron
+                for (const photo of point.photos) {
+                  if (!photo.mediaId || photo.file) continue;
+                  try {
+                    await api.updateTrailPointMedia(trailId, pointId, photo.mediaId, { media_type: photo.type });
+                  } catch (err: any) {
+                    console.error("Error actualizando tipo de foto del punto:", err);
+                  }
+                }
+
+                // Subir fotos/videos nuevos del punto
                 for (let j = 0; j < point.photos.length; j++) {
                   const photo = point.photos[j];
                   if (!photo.file) continue;
