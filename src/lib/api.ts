@@ -473,4 +473,34 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+
+  // Wallpapers
+  getWallpapers: async (params?: { limit?: number; offset?: number }) => {
+    const qp = new URLSearchParams();
+    if (params?.limit != null) qp.append('limit', params.limit.toString());
+    if (params?.offset != null) qp.append('offset', params.offset.toString());
+    const q = qp.toString();
+    return apiRequest<{ wallpapers: Wallpaper[]; total: number }>(
+      `/wallpapers${q ? `?${q}` : ''}`
+    );
+  },
+
+  createWallpaper: async (data: { url: string; title?: string; order_index?: number }) => {
+    return apiRequest<{ message: string; wallpaper: Wallpaper }>('/wallpapers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteWallpaper: async (id: string) => {
+    return apiRequest<{ message: string }>(`/wallpapers/${id}`, { method: 'DELETE' });
+  },
 };
+
+export interface Wallpaper {
+  id: string;
+  url: string;
+  title: string | null;
+  order_index: number;
+  created_at: string;
+}

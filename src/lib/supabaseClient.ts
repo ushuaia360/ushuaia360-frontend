@@ -40,6 +40,7 @@ export const TRAILS_BUCKET = "trails";
 export const TOURIST_PLACES_BUCKET = "tourist_places";
 /** Fotos de reseñas (app móvil sube vía API → Supabase Storage). */
 export const REVIEWS_BUCKET = "reviews";
+export const WALLPAPERS_BUCKET = "wallpapers";
 
 export function getPublicUrlForBucket(bucket: string, path: string): string {
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
@@ -106,4 +107,23 @@ export async function uploadTouristPlaceFile(
   contentType: string
 ): Promise<string> {
   return uploadToBucket(TOURIST_PLACES_BUCKET, path, file, contentType);
+}
+
+/**
+ * Uploads a wallpaper image to the wallpapers bucket.
+ */
+export async function uploadWallpaperFile(
+  path: string,
+  file: File | Blob,
+  contentType: string
+): Promise<string> {
+  return uploadToBucket(WALLPAPERS_BUCKET, path, file, contentType);
+}
+
+/**
+ * Deletes a file from a Supabase Storage bucket by path.
+ */
+export async function deleteFromBucket(bucket: string, path: string): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).remove([path]);
+  if (error) throw new Error(`Error al eliminar archivo: ${error.message}`);
 }
