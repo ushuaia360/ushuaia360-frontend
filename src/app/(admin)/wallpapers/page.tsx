@@ -7,11 +7,14 @@ import { api, Wallpaper } from "@/lib/api";
 import { isAllowed } from "@/lib/image";
 import { uploadWallpaperFile, deleteFromBucket, WALLPAPERS_BUCKET } from "@/lib/supabaseClient";
 
+type Orientation = "vertical" | "horizontal";
+
 interface UploadingItem {
   id: string;
   file: File;
   preview: string;
   title: string;
+  orientation: Orientation;
   progress: "uploading" | "saving" | "done" | "error";
   error?: string;
 }
@@ -19,13 +22,17 @@ interface UploadingItem {
 function pathFromUrl(url: string): string {
   try {
     const u = new URL(url);
-    // Supabase public URL: .../storage/v1/object/public/{bucket}/{path}
     const match = u.pathname.match(/\/object\/public\/[^/]+\/(.+)$/);
     return match ? match[1] : u.pathname.split("/").slice(-1)[0];
   } catch {
     return url.split("/").pop() ?? url;
   }
 }
+
+const ASPECT: Record<Orientation, string> = {
+  vertical: "aspect-[9/16]",
+  horizontal: "aspect-[16/9]",
+};
 
 export default function WallpapersPage() {
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
@@ -36,6 +43,8 @@ export default function WallpapersPage() {
   const [dragOver, setDragOver] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Wallpaper | null>(null);
+  const [orientation, setOrientation] = useState<Orientation>("vertical");
+  const [filter, setFilter] = useState<Orientation | "all">("all");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -63,6 +72,7 @@ export default function WallpapersPage() {
       file: f,
       preview: URL.createObjectURL(f),
       title: "",
+      orientation,
       progress: "uploading",
     }));
     setUploading((prev) => [...prev, ...items]);
@@ -87,19 +97,16 @@ export default function WallpapersPage() {
         continue;
       }
 
-      // Save to backend
       setUploading((prev) =>
         prev.map((u) => u.id === item.id ? { ...u, progress: "saving" } : u)
       );
       try {
-        const title = uploading.find((u) => u.id === item.id)?.title?.trim() || item.title.trim() || undefined;
-        const res = await api.createWallpaper({ url, title });
+        const res = await api.createWallpaper({ url, orientation: item.orientation });
         setWallpapers((prev) => [res.wallpaper, ...prev]);
         setTotal((t) => t + 1);
         setUploading((prev) =>
           prev.map((u) => u.id === item.id ? { ...u, progress: "done" } : u)
         );
-        // Remove from uploading after a short delay
         setTimeout(() => {
           setUploading((prev) => {
             const found = prev.find((u) => u.id === item.id);
@@ -117,7 +124,7 @@ export default function WallpapersPage() {
         );
       }
     }
-  }, [uploading]);
+  }, [orientation]);
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) processFiles(e.target.files);
@@ -134,12 +141,11 @@ export default function WallpapersPage() {
     setDeletingId(wallpaper.id);
     try {
       await api.deleteWallpaper(wallpaper.id);
-      // Also remove from Supabase Storage
       try {
         const path = pathFromUrl(wallpaper.url);
         await deleteFromBucket(WALLPAPERS_BUCKET, path);
       } catch {
-        // Non-critical: metadata already deleted
+        // Non-critical
       }
       setWallpapers((prev) => prev.filter((w) => w.id !== wallpaper.id));
       setTotal((t) => t - 1);
@@ -166,6 +172,12 @@ export default function WallpapersPage() {
     error: "Error",
   };
 
+  const filteredWallpapers =
+    filter === "all" ? wallpapers : wallpapers.filter((w) => w.orientation === filter);
+
+  const vertCount = wallpapers.filter((w) => w.orientation === "vertical").length;
+  const horizCount = wallpapers.filter((w) => w.orientation === "horizontal").length;
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader title={`Wallpapers${total > 0 ? ` (${total})` : ""}`}>
@@ -187,24 +199,59 @@ export default function WallpapersPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto p-8">
-        {/* Drop zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`mb-8 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-10 transition-colors ${
-            dragOver
-              ? "border-[#3FA9F5] bg-[#EBF5FE]"
-              : "border-[#DCDCDC] bg-gray-50 hover:border-[#3FA9F5] hover:bg-[#EBF5FE]"
-          }`}
-        >
-          <Upload className={`h-7 w-7 ${dragOver ? "text-[#3FA9F5]" : "text-gray-400"}`} />
-          <p className="text-sm font-medium text-gray-600">
-            Arrastrá imágenes acá o{" "}
-            <span className="text-[#3FA9F5]">hacé clic para seleccionar</span>
-          </p>
-          <p className="text-xs text-gray-400">JPEG, PNG, WebP, HEIC — se suben en calidad original</p>
+        {/* Orientation selector + drop zone */}
+        <div className="mb-8 space-y-3">
+          {/* Orientation toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-gray-500">Orientación de la próxima subida:</span>
+            <div className="flex rounded-lg border border-[#DCDCDC] overflow-hidden">
+              <button
+                onClick={() => setOrientation("vertical")}
+                className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                  orientation === "vertical"
+                    ? "bg-[#3FA9F5] text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Vertical
+              </button>
+              <button
+                onClick={() => setOrientation("horizontal")}
+                className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-[#DCDCDC] ${
+                  orientation === "horizontal"
+                    ? "bg-[#3FA9F5] text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Horizontal
+              </button>
+            </div>
+          </div>
+
+          {/* Drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-10 transition-colors ${
+              dragOver
+                ? "border-[#3FA9F5] bg-[#EBF5FE]"
+                : "border-[#DCDCDC] bg-gray-50 hover:border-[#3FA9F5] hover:bg-[#EBF5FE]"
+            }`}
+          >
+            <Upload className={`h-7 w-7 ${dragOver ? "text-[#3FA9F5]" : "text-gray-400"}`} />
+            <p className="text-sm font-medium text-gray-600">
+              Arrastrá imágenes acá o{" "}
+              <span className="text-[#3FA9F5]">hacé clic para seleccionar</span>
+            </p>
+            <p className="text-xs text-gray-400">
+              JPEG, PNG, WebP, HEIC — se suben como{" "}
+              <span className="font-medium text-gray-500">
+                {orientation === "vertical" ? "vertical (9:16)" : "horizontal (16:9)"}
+              </span>
+            </p>
+          </div>
         </div>
 
         {/* Uploading queue */}
@@ -216,11 +263,10 @@ export default function WallpapersPage() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {uploading.map((item) => (
                 <div key={item.id} className="relative overflow-hidden rounded-xl border border-[#EBEBEB] bg-white">
-                  <div className="aspect-[9/16] w-full overflow-hidden bg-gray-100">
+                  <div className={`${ASPECT[item.orientation]} w-full overflow-hidden bg-gray-100`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={item.preview} alt="" className="h-full w-full object-cover" />
                   </div>
-                  {/* Progress overlay */}
                   <div
                     className={`absolute inset-0 flex flex-col items-center justify-center gap-1 ${
                       item.progress === "done"
@@ -277,18 +323,36 @@ export default function WallpapersPage() {
           </div>
         ) : (
           <>
-            {wallpapers.length > 0 && (
-              <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
-                Galería ({wallpapers.length})
-              </h2>
-            )}
+            {/* Filter tabs */}
+            <div className="mb-4 flex items-center gap-1">
+              {(
+                [
+                  { key: "all", label: `Todos (${total})` },
+                  { key: "vertical", label: `Vertical (${vertCount})` },
+                  { key: "horizontal", label: `Horizontal (${horizCount})` },
+                ] as { key: typeof filter; label: string }[]
+              ).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    filter === key
+                      ? "bg-[#3FA9F5] text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {wallpapers.map((w) => (
+              {filteredWallpapers.map((w) => (
                 <div
                   key={w.id}
                   className="group relative overflow-hidden rounded-xl border border-[#EBEBEB] bg-white shadow-sm"
                 >
-                  <div className="aspect-[9/16] w-full overflow-hidden bg-gray-100">
+                  <div className={`${ASPECT[w.orientation ?? "vertical"]} w-full overflow-hidden bg-gray-100`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={w.url}

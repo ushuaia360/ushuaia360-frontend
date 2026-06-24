@@ -485,7 +485,7 @@ export const api = {
     );
   },
 
-  createWallpaper: async (data: { url: string; title?: string; order_index?: number }) => {
+  createWallpaper: async (data: { url: string; title?: string; orientation?: 'vertical' | 'horizontal'; order_index?: number }) => {
     return apiRequest<{ message: string; wallpaper: Wallpaper }>('/wallpapers', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -501,6 +501,7 @@ export interface Wallpaper {
   id: string;
   url: string;
   title: string | null;
+  orientation: 'vertical' | 'horizontal';
   order_index: number;
   created_at: string;
 }
