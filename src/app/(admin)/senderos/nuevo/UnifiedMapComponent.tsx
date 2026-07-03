@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createLeafletBaseLayer } from "@/lib/leafletMapLayers";
+import MapSatelliteToggle from "@/components/admin/map-satellite-toggle";
 
 interface UnifiedMapComponentProps {
   mapPoint: [number, number] | null;
@@ -45,6 +47,7 @@ export default function UnifiedMapComponent({
 }: UnifiedMapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const isInitializedRef = useRef<boolean>(false);
   const initAttemptRef = useRef<boolean>(false);
   
@@ -60,6 +63,7 @@ export default function UnifiedMapComponent({
   const [showRoute, setShowRoute] = useState(true);
   const [showPointsOfInterest, setShowPointsOfInterest] = useState(true);
   const [showEmergencyPoints, setShowEmergencyPoints] = useState(true);
+  const [useSatellite, setUseSatellite] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -172,11 +176,7 @@ export default function UnifiedMapComponent({
           zoom,
         });
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-        }).addTo(newMap);
+        tileLayerRef.current = createLeafletBaseLayer(L, false).addTo(newMap);
 
         mapInstanceRef.current = newMap;
         isInitializedRef.current = true;
@@ -275,6 +275,22 @@ export default function UnifiedMapComponent({
       }
     };
   }, []); // Solo ejecutar una vez al montar
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const L = (window as any).L;
+    if (!map || !L || !isInitializedRef.current) return;
+
+    if (tileLayerRef.current) {
+      try {
+        map.removeLayer(tileLayerRef.current);
+      } catch {
+        /* noop */
+      }
+    }
+
+    tileLayerRef.current = createLeafletBaseLayer(L, useSatellite).addTo(map);
+  }, [useSatellite]);
 
   // Efecto separado para invalidar tamaño cuando cambia el contenedor o el punto principal
   useEffect(() => {
@@ -838,6 +854,12 @@ export default function UnifiedMapComponent({
           {isErasing ? "✕ Desactivar Borrar" : "🗑️ Borrar Puntos"}
         </button>
       </div>
+
+      <MapSatelliteToggle
+        useSatellite={useSatellite}
+        onToggle={() => setUseSatellite((v) => !v)}
+        className="absolute bottom-2 right-2 z-[1000]"
+      />
 
       {/* Instrucciones */}
       <div className="absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-lg">

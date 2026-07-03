@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createLeafletBaseLayer } from "@/lib/leafletMapLayers";
+import MapSatelliteToggle from "@/components/admin/map-satellite-toggle";
 
 interface LocationPickerMapProps {
   point: [number, number] | null;
@@ -54,8 +56,10 @@ export default function LocationPickerMap({
 }: LocationPickerMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const onPointChangeRef = useRef(onPointChange);
+  const [useSatellite, setUseSatellite] = useState(false);
 
   useEffect(() => {
     onPointChangeRef.current = onPointChange;
@@ -88,11 +92,7 @@ export default function LocationPickerMap({
           zoom: initialZoom,
         });
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-        }).addTo(map);
+        tileLayerRef.current = createLeafletBaseLayer(L, false).addTo(map);
 
         mapRef.current = map;
 
@@ -126,8 +126,25 @@ export default function LocationPickerMap({
         mapRef.current = null;
       }
       markerRef.current = null;
+      tileLayerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = (window as any).L;
+    if (!map || !L) return;
+
+    if (tileLayerRef.current) {
+      try {
+        map.removeLayer(tileLayerRef.current);
+      } catch {
+        /* noop */
+      }
+    }
+
+    tileLayerRef.current = createLeafletBaseLayer(L, useSatellite).addTo(map);
+  }, [useSatellite]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -179,6 +196,10 @@ export default function LocationPickerMap({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+      <MapSatelliteToggle
+        useSatellite={useSatellite}
+        onToggle={() => setUseSatellite((v) => !v)}
+      />
       <div className="pointer-events-none absolute bottom-2 left-2 z-[1000] rounded-lg bg-white/95 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-lg">
         Haz clic en el mapa para seleccionar la ubicación
       </div>
