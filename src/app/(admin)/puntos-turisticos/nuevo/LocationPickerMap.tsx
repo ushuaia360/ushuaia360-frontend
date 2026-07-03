@@ -60,6 +60,7 @@ export default function LocationPickerMap({
   const markerRef = useRef<any>(null);
   const onPointChangeRef = useRef(onPointChange);
   const [useSatellite, setUseSatellite] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     onPointChangeRef.current = onPointChange;
@@ -95,6 +96,7 @@ export default function LocationPickerMap({
         tileLayerRef.current = createLeafletBaseLayer(L, false).addTo(map);
 
         mapRef.current = map;
+        setMapReady(true);
 
         map.on("click", (e: any) => {
           const { lat, lng } = e.latlng;
@@ -191,7 +193,7 @@ export default function LocationPickerMap({
       });
       markerRef.current = marker;
     }
-  }, [point]);
+  }, [point, mapReady]);
 
   return (
     <div className="relative h-full w-full">
