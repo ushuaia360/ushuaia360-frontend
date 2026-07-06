@@ -16,6 +16,7 @@ import {
   Crown,
   Flag,
   Image,
+  Scale,
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050/api/v1";
@@ -29,6 +30,7 @@ const nav = [
   { href: "/comentarios", label: "Comentarios", icon: MessageSquare },
   { href: "/reportes", label: "Reportes", icon: Flag },
   { href: "/wallpapers", label: "Wallpapers", icon: Image },
+  { href: "/legal", label: "Legal", icon: Scale },
 ];
 
 interface User {

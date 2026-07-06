@@ -495,6 +495,18 @@ export const api = {
   deleteWallpaper: async (id: string) => {
     return apiRequest<{ message: string }>(`/wallpapers/${id}`, { method: 'DELETE' });
   },
+
+  // Legal documents
+  getLegalDocument: async (type: 'terms' | 'privacy') => {
+    return apiRequest<LegalDocument>(`/legal/${type}`);
+  },
+
+  updateLegalDocument: async (type: 'terms' | 'privacy', content: string) => {
+    return apiRequest<{ message: string; document: LegalDocument }>(`/legal/${type}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  },
 };
 
 export interface Wallpaper {
@@ -504,4 +516,10 @@ export interface Wallpaper {
   orientation: 'vertical' | 'horizontal';
   order_index: number;
   created_at: string;
+}
+
+export interface LegalDocument {
+  type: 'terms' | 'privacy';
+  content: string;
+  updated_at: string | null;
 }
