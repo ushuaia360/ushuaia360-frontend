@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
@@ -70,23 +69,16 @@ function VerifyWithToken({ token }: { token: string }) {
           {phase !== "loading" && message}
         </p>
         {phase === "ok" && (
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <div className="mt-6 flex flex-col items-center gap-3">
             <a
               href={appOpenHref}
-              className="font-medium text-[#3FA9F5] underline underline-offset-2"
+              className="w-full rounded-xl bg-[#3FA9F5] py-3 text-center text-sm font-medium text-white shadow-[0_2px_8px_rgba(63,169,245,0.35)] transition hover:bg-[#2b9de8]"
             >
               Abrir en la app Ushuaia360
             </a>
-          </p>
+            <p className="text-xs text-gray-400">Ya podés cerrar esta pestaña.</p>
+          </div>
         )}
-        <div className="mt-8 flex flex-col gap-3 border-t border-[#E4E4E7] pt-6">
-          <Link
-            href="/login"
-            className="rounded-xl bg-[#3FA9F5] py-3 text-center text-sm font-medium text-white shadow-[0_2px_8px_rgba(63,169,245,0.35)] transition hover:bg-[#2b9de8]"
-          >
-            Ir al panel (admin)
-          </Link>
-        </div>
       </div>
     </div>
   );
@@ -104,16 +96,8 @@ function VerifyContent() {
             Enlace inválido
           </h1>
           <p className="mt-3 text-center text-sm font-light leading-relaxed text-gray-600">
-            Este enlace no es válido o está incompleto.
+            Este enlace no es válido o está incompleto. Revisá el email de verificación e intentá de nuevo.
           </p>
-          <div className="mt-8 flex flex-col gap-3 border-t border-[#E4E4E7] pt-6">
-            <Link
-              href="/login"
-              className="rounded-xl bg-[#3FA9F5] py-3 text-center text-sm font-medium text-white shadow-[0_2px_8px_rgba(63,169,245,0.35)] transition hover:bg-[#2b9de8]"
-            >
-              Ir al panel (admin)
-            </Link>
-          </div>
         </div>
       </div>
     );
