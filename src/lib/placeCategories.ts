@@ -2,14 +2,14 @@
  * Categorías de puntos turísticos: valores enviados al API y etiquetas en español.
  */
 export const PLACE_CATEGORIES = [
-  { value: "turistico", label: "Turístico" },
+  { value: "turismo", label: "Turismo" },
   { value: "naturaleza", label: "Naturaleza" },
-  { value: "patrimonio", label: "Patrimonio e historia" },
+  { value: "historia", label: "Historia" },
   { value: "miradores", label: "Miradores" },
   { value: "costa", label: "Costa y mar" },
-  { value: "cultura", label: "Cultura" },
   { value: "gastronomia", label: "Gastronomía" },
-  { value: "otros", label: "Otros" },
+  { value: "hospedaje", label: "Hospedaje" },
+  { value: "compras", label: "Compras" },
 ] as const;
 
 export type PlaceCategorySlug = (typeof PLACE_CATEGORIES)[number]["value"];
@@ -19,12 +19,12 @@ export const placeCategoryLabels: Record<string, string> = Object.fromEntries(
 );
 
 export const placeCategoryStyle: Record<string, string> = {
-  turistico: "bg-blue-50 text-blue-800",
+  turismo: "bg-blue-50 text-blue-800",
   naturaleza: "bg-emerald-50 text-emerald-800",
-  patrimonio: "bg-amber-50 text-amber-800",
+  historia: "bg-amber-50 text-amber-800",
   miradores: "bg-sky-50 text-sky-800",
   costa: "bg-cyan-50 text-cyan-800",
-  cultura: "bg-violet-50 text-violet-800",
   gastronomia: "bg-orange-50 text-orange-800",
-  otros: "bg-gray-100 text-gray-600",
+  hospedaje: "bg-teal-50 text-teal-800",
+  compras: "bg-rose-50 text-rose-800",
 };

@@ -41,7 +41,7 @@ export default function NuevoPuntoTuristicoPage() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    category: "turistico" as PlaceCategorySlug,
+    category: "turismo" as PlaceCategorySlug,
     is_premium: false,
     contact_link: "",
     region: "Tierra del Fuego",
