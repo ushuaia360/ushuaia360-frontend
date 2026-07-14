@@ -25,6 +25,38 @@ export interface DashboardStats {
   trail_comments: TrailCommentCount[];
 }
 
+export interface FeaturedTrailItem {
+  featured_item_id: string;
+  order_index: number;
+  kind: 'trail';
+  id: string;
+  slug: string;
+  name: string | null;
+  difficulty: string | null;
+  route_type: string | null;
+  region: string | null;
+  distance_km: number | null;
+  duration_minutes: number | null;
+  description: string | null;
+  thumbnail_url: string | null;
+}
+
+export interface FeaturedPlaceItem {
+  featured_item_id: string;
+  order_index: number;
+  kind: 'place';
+  id: string;
+  slug: string;
+  name: string | null;
+  category: string | null;
+  region: string | null;
+  country: string | null;
+  description: string | null;
+  thumbnail_url: string | null;
+}
+
+export type FeaturedItem = FeaturedTrailItem | FeaturedPlaceItem;
+
 async function getAuthToken(): Promise<string | null> {
   // Obtener el token de las cookies o localStorage
   if (typeof document !== 'undefined') {
@@ -505,6 +537,31 @@ export const api = {
     return apiRequest<{ message: string; document: LegalDocument }>(`/legal/${type}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
+    });
+  },
+
+  // Destacados (Partners)
+  getFeaturedItems: async () => {
+    return apiRequest<{ items: FeaturedItem[] }>('/featured');
+  },
+
+  addFeaturedItem: async (data: { entity_type: 'trail' | 'place'; entity_id: string }) => {
+    return apiRequest<{ message: string; featured_item_id: string; order_index: number }>('/featured', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  removeFeaturedItem: async (featuredItemId: string) => {
+    return apiRequest<{ message: string }>(`/featured/${featuredItemId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  moveFeaturedItem: async (featuredItemId: string, direction: 'up' | 'down') => {
+    return apiRequest<{ message: string }>(`/featured/${featuredItemId}/move`, {
+      method: 'PATCH',
+      body: JSON.stringify({ direction }),
     });
   },
 };

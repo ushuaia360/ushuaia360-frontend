@@ -73,7 +73,6 @@ export default function EditarSenderoPage() {
     max_altitude: "",
     min_altitude: "",
     duration_minutes: "",
-    is_featured: false,
     is_premium: false,
     contact_link: "",
     status_id: "",
@@ -137,7 +136,6 @@ export default function EditarSenderoPage() {
           max_altitude: trail.max_altitude?.toString() || "",
           min_altitude: trail.min_altitude?.toString() || "",
           duration_minutes: trail.duration_minutes?.toString() || "",
-          is_featured: trail.is_featured || false,
           is_premium: trail.is_premium || false,
           contact_link: trail.contact_link || "",
           status_id: trail.status_id?.toString() || "",
@@ -772,7 +770,6 @@ export default function EditarSenderoPage() {
               if (formData.max_altitude) trailData.max_altitude = parseInt(formData.max_altitude);
               if (formData.min_altitude) trailData.min_altitude = parseInt(formData.min_altitude);
               if (formData.duration_minutes) trailData.duration_minutes = parseInt(formData.duration_minutes);
-              if (formData.is_featured !== undefined) trailData.is_featured = formData.is_featured;
               if (formData.is_premium !== undefined) trailData.is_premium = formData.is_premium;
               // Estado es obligatorio
               if (!formData.status_id) {
@@ -1907,23 +1904,6 @@ export default function EditarSenderoPage() {
               Configuración
             </h3>
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  name="is_featured"
-                  id="is_featured"
-                  checked={formData.is_featured}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 rounded border-[#EBEBEB] text-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/20"
-                />
-                <label
-                  htmlFor="is_featured"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Sendero destacado
-                </label>
-              </div>
-
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"

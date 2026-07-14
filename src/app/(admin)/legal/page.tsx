@@ -12,13 +12,13 @@ const TABS: { key: Tab; label: string; icon: typeof FileText; description: strin
     key: "terms",
     label: "Términos y Condiciones",
     icon: FileText,
-    description: "Texto que se muestra en el registro de la app al tocar "Términos y Condiciones".",
+    description: "Texto que se muestra en el registro de la app al tocar \"Términos y Condiciones\".",
   },
   {
     key: "privacy",
     label: "Política de Privacidad",
     icon: Shield,
-    description: "Texto que se muestra en el registro de la app al tocar "Política de Privacidad".",
+    description: "Texto que se muestra en el registro de la app al tocar \"Política de Privacidad\".",
   },
 ];
 
