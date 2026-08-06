@@ -8,7 +8,11 @@ import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { uploadTouristPlaceFile } from "@/lib/supabaseClient";
 import { compressToWebp, isAllowed } from "@/lib/image";
-import { PLACE_CATEGORIES, type PlaceCategorySlug } from "@/lib/placeCategories";
+import {
+  PLACE_CATEGORIES,
+  placeCategoryLabels,
+  type PlaceCategorySlug,
+} from "@/lib/placeCategories";
 
 const LocationPickerMap = dynamic(() => import("../../nuevo/LocationPickerMap"), {
   ssr: false,
@@ -391,6 +395,13 @@ export default function EditarPuntoTuristicoPage() {
                     className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
                   >
                     <option value="">Seleccionar categoría</option>
+                    {formData.category &&
+                      !PLACE_CATEGORIES.some((c) => c.value === formData.category) && (
+                        <option value={formData.category}>
+                          {placeCategoryLabels[formData.category] || formData.category}{" "}
+                          (obsoleta)
+                        </option>
+                      )}
                     {PLACE_CATEGORIES.map((c) => (
                       <option key={c.value} value={c.value}>
                         {c.label}

@@ -6,7 +6,6 @@ export const PLACE_CATEGORIES = [
   { value: "naturaleza", label: "Naturaleza" },
   { value: "historia", label: "Historia" },
   { value: "miradores", label: "Miradores" },
-  { value: "costa", label: "Costa y mar" },
   { value: "gastronomia", label: "Gastronomía" },
   { value: "hospedaje", label: "Hospedaje" },
   { value: "compras", label: "Compras" },
@@ -14,9 +13,11 @@ export const PLACE_CATEGORIES = [
 
 export type PlaceCategorySlug = (typeof PLACE_CATEGORIES)[number]["value"];
 
-export const placeCategoryLabels: Record<string, string> = Object.fromEntries(
-  PLACE_CATEGORIES.map((c) => [c.value, c.label])
-);
+export const placeCategoryLabels: Record<string, string> = {
+  ...Object.fromEntries(PLACE_CATEGORIES.map((c) => [c.value, c.label])),
+  // Legacy: ya no se ofrece al crear/editar, pero puede existir en datos viejos
+  costa: "Costa y mar",
+};
 
 export const placeCategoryStyle: Record<string, string> = {
   turismo: "bg-blue-50 text-blue-800",
