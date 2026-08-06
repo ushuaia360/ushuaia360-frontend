@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Eraser, Upload, X } from "lucide-react";
 import { createLeafletBaseLayer } from "@/lib/leafletMapLayers";
+import { parseKmlRoute } from "@/lib/kml";
 import MapSatelliteToggle from "@/components/admin/map-satellite-toggle";
 
 interface UnifiedMapComponentProps {
@@ -64,6 +66,28 @@ export default function UnifiedMapComponent({
   const [showPointsOfInterest, setShowPointsOfInterest] = useState(true);
   const [showEmergencyPoints, setShowEmergencyPoints] = useState(true);
   const [useSatellite, setUseSatellite] = useState(false);
+  const kmlInputRef = useRef<HTMLInputElement>(null);
+  const [kmlError, setKmlError] = useState<string | null>(null);
+
+  const handleKmlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setKmlError(null);
+    try {
+      const text = await file.text();
+      const points = parseKmlRoute(text);
+      if (points.length === 0) {
+        setKmlError("No se encontraron coordenadas en el archivo KML");
+        return;
+      }
+      onRouteSegmentsChange(points);
+      onDrawingRouteChange(false);
+      onErasingChange(false);
+    } catch (err: any) {
+      setKmlError(err.message || "Error al leer el archivo KML");
+    }
+  };
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -554,30 +578,46 @@ export default function UnifiedMapComponent({
           return;
         }
 
+        // Con muchos puntos (ej. rutas importadas de KML) los pines grandes tapan la ruta,
+        // así que se usan puntitos chicos en vez del ícono completo.
+        const useSmallDots = routeSegments.length > 15;
+
         // Crear nuevos marcadores
         const newMarkers = routeSegments.map((segment, index) => {
-          const marker = L.marker([segment[0], segment[1]], {
-            draggable: !isErasing, // Solo arrastrable si no está en modo borrar
-            icon: L.icon({
-              iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-              iconSize: [25, 41],
-              iconAnchor: [12, 41],
-              popupAnchor: [1, -34],
-              shadowSize: [41, 41]
-            })
-          }).addTo(mapInstanceRef.current);
+          let marker: any;
 
-          marker.bindPopup(`Punto ${index + 1} de la ruta`);
-          
-          marker.on("dragend", (e: any) => {
-            if (!isErasing) {
-              const latlng = e.target.getLatLng();
-              const newSegments = [...routeSegments];
-              newSegments[index] = [latlng.lat, latlng.lng];
-              onRouteSegmentsChange(newSegments);
-            }
-          });
+          if (useSmallDots) {
+            marker = L.circleMarker([segment[0], segment[1]], {
+              radius: 3,
+              color: "#3FA9F5",
+              weight: 1,
+              fillColor: "#3FA9F5",
+              fillOpacity: 0.9,
+            }).addTo(mapInstanceRef.current);
+          } else {
+            marker = L.marker([segment[0], segment[1]], {
+              draggable: !isErasing, // Solo arrastrable si no está en modo borrar
+              icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+              })
+            }).addTo(mapInstanceRef.current);
+
+            marker.bindPopup(`Punto ${index + 1} de la ruta`);
+
+            marker.on("dragend", (e: any) => {
+              if (!isErasing) {
+                const latlng = e.target.getLatLng();
+                const newSegments = [...routeSegments];
+                newSegments[index] = [latlng.lat, latlng.lng];
+                onRouteSegmentsChange(newSegments);
+              }
+            });
+          }
 
           marker.on("click", () => {
             // Solo borrar si está en modo goma de borrar
@@ -844,15 +884,49 @@ export default function UnifiedMapComponent({
               onDrawingRouteChange(false);
             }
           }}
-          className={`w-full rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+          className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
             isErasing
               ? "bg-red-500 text-white hover:bg-red-600"
               : "bg-white text-gray-700 hover:bg-gray-50 border border-[#EBEBEB]"
           }`}
           title="Activar modo borrar para eliminar puntos de la ruta"
         >
-          {isErasing ? "✕ Desactivar Borrar" : "🗑️ Borrar Puntos"}
+          {isErasing ? (
+            <>
+              <X className="h-3.5 w-3.5" /> Desactivar Borrar
+            </>
+          ) : (
+            <>
+              <Eraser className="h-3.5 w-3.5" /> Borrar Puntos
+            </>
+          )}
         </button>
+
+        {/* Botón de subir KML */}
+        <input
+          ref={kmlInputRef}
+          type="file"
+          accept=".kml,application/vnd.google-earth.kml+xml"
+          onChange={handleKmlUpload}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            kmlInputRef.current?.click();
+          }}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors bg-white text-gray-700 hover:bg-gray-50 border border-[#EBEBEB]"
+          title="Reemplaza la ruta actual por el trazado del archivo KML"
+        >
+          <Upload className="h-3.5 w-3.5" /> Subir KML
+        </button>
+        {kmlError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-2 py-1.5 text-[11px] text-red-600">
+            {kmlError}
+          </div>
+        )}
       </div>
 
       <MapSatelliteToggle
