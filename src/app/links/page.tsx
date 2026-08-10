@@ -139,8 +139,7 @@ export default function LinksPage() {
           className="fade-up mt-3 max-w-[26ch] text-center text-[15px] font-light leading-relaxed text-[#5B6570] md:max-w-[32ch] md:text-lg lg:text-xl"
           style={{ animationDelay: "0.2s" }}
         >
-          Mapas de senderos de Ushuaia, con navegación offline en tu
-          bolsillo.
+          El fin del mundo a tu alcance.
         </p>
 
         {/* stat readout */}
