@@ -5,8 +5,8 @@ const APP_STORE_URL = "#";
 const PLAY_STORE_URL = "#";
 
 const STATS = [
-  { value: "40+", label: "Senderos" },
-  { value: "1.250 m", label: "Desnivel máx" },
+  { value: "40+", label: "Puntos" },
+  { value: "360°", label: "Vistas panorámicas" },
   { value: "100%", label: "Offline" },
 ];
 
@@ -139,7 +139,7 @@ export default function LinksPage() {
           className="fade-up mt-3 max-w-[26ch] text-center text-[15px] font-light leading-relaxed text-[#5B6570] md:max-w-[32ch] md:text-lg lg:text-xl"
           style={{ animationDelay: "0.2s" }}
         >
-          Mapas de senderos del fin del mundo, con navegación offline en tu
+          Mapas de senderos de Ushuaia, con navegación offline en tu
           bolsillo.
         </p>
 
