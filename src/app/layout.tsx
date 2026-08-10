@@ -11,6 +11,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Ushuaia360 · Admin",
   description: "Panel de administración de Ushuaia360",
+  icons: {
+    icon: "/images/icon.png",
+  },
 };
 
 export default function RootLayout({
