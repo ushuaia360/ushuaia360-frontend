@@ -6,7 +6,7 @@ const PLAY_STORE_URL = "#";
 
 const STATS = [
   { value: "40+", label: "Puntos" },
-  { value: "360°", label: "Vistas panorámicas" },
+  { value: "360°", label: "Vistas" },
   { value: "100%", label: "Offline" },
 ];
 
