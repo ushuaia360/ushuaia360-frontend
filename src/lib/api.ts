@@ -235,7 +235,7 @@ export const api = {
   createTrailEmergencyPoint: async (trailId: string, data: {
     name: string;
     description?: string;
-    phone: string;
+    phone?: string;
     location: { longitude: number; latitude: number; elevation?: number };
     order_index?: number;
   }) => {

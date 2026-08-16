@@ -584,12 +584,12 @@ export default function NuevoSenderoPage() {
 
               // 5. Crear puntos de emergencia
               for (const ep of emergencyPoints) {
-                if (!ep.location || !ep.name.trim() || !ep.phone.trim()) continue;
+                if (!ep.location || !ep.name.trim()) continue;
                 try {
                   await api.createTrailEmergencyPoint(trailId, {
                     name: ep.name.trim(),
                     description: ep.description?.trim() || undefined,
-                    phone: ep.phone.trim(),
+                    phone: ep.phone?.trim() || undefined,
                     location: {
                       longitude: ep.location[1],
                       latitude: ep.location[0],
