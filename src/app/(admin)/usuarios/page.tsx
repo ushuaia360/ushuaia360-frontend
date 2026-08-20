@@ -3,7 +3,7 @@
 import PageHeader from "@/components/admin/page-header";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
-import { X } from "lucide-react";
+import { X, Crown } from "lucide-react";
 import TablePagination, {
   ADMIN_TABLE_PAGE_SIZE,
 } from "@/components/admin/table-pagination";
@@ -39,6 +39,7 @@ interface User {
   avatar_url?: string;
   is_admin: boolean;
   is_suspended?: boolean;
+  is_premium?: boolean;
   created_at?: string;
 }
 
@@ -62,10 +63,13 @@ function UserRowSkeleton() {
         <div className="h-6 w-20 bg-gray-200 rounded-full"></div>
       </td>
       <td className="px-6 py-3">
+        <div className="h-6 w-20 bg-gray-200 rounded-full"></div>
+      </td>
+      <td className="px-6 py-3">
         <div className="h-4 w-32 bg-gray-200 rounded"></div>
       </td>
       <td className="px-6 py-3 text-right">
-        <div className="h-7 w-24 bg-gray-200 rounded-full"></div>
+        <div className="ml-auto h-7 w-40 bg-gray-200 rounded-full"></div>
       </td>
     </tr>
   );
@@ -123,6 +127,66 @@ function SuspendConfirmModal({
             }`}
           >
             {isSuspended ? "Reactivar" : "Suspender"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de confirmación para marcar/quitar premium
+interface PremiumConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  userName: string;
+  isPremium: boolean;
+}
+
+function PremiumConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  userName,
+  isPremium,
+}: PremiumConfirmModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl border border-[#EBEBEB] bg-white shadow-lg">
+        <div className="p-6">
+          <h3 className="mb-2 flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <Crown className="h-5 w-5 text-amber-500" />
+            {isPremium ? "Quitar Premium" : "Hacer Premium"}
+          </h3>
+          <p className="mb-1 text-sm text-gray-600">
+            {isPremium
+              ? `¿Estás seguro de que deseas quitarle el premium a ${userName}? Perderá el acceso a los beneficios premium.`
+              : `¿Estás seguro de que deseas hacer premium a ${userName}? El usuario obtendrá acceso a los beneficios premium.`}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-[#EBEBEB] bg-gray-50 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${
+              isPremium
+                ? "bg-gray-500 hover:bg-gray-600"
+                : "bg-amber-500 hover:bg-amber-600"
+            }`}
+          >
+            {isPremium ? "Quitar Premium" : "Hacer Premium"}
           </button>
         </div>
       </div>
@@ -338,6 +402,10 @@ export default function UsuariosPage() {
     isOpen: boolean;
     user: User | null;
   }>({ isOpen: false, user: null });
+  const [premiumModal, setPremiumModal] = useState<{
+    isOpen: boolean;
+    user: User | null;
+  }>({ isOpen: false, user: null });
   const [createAdminModal, setCreateAdminModal] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -411,6 +479,27 @@ export default function UsuariosPage() {
     }
   };
 
+  const handlePremiumClick = (user: User) => {
+    setPremiumModal({ isOpen: true, user });
+  };
+
+  const handlePremiumConfirm = async () => {
+    if (!premiumModal.user) return;
+
+    try {
+      const isPremium = !premiumModal.user.is_premium;
+      await api.setUserPremium(premiumModal.user.id, isPremium);
+      await loadUsers();
+    } catch (error: unknown) {
+      console.error("Error updating premium status:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar el estado premium del usuario";
+      alert(message);
+    }
+  };
+
   return (
     <div>
       <PageHeader title="Usuarios">
@@ -456,19 +545,22 @@ export default function UsuariosPage() {
           <table className="w-full table-fixed">
             <thead className="py-3">
               <tr className="border-b border-[#F0F0F0] bg-gray-50/60">
-                <th className="w-[30%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <th className="w-[26%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   Usuario
                 </th>
-                <th className="w-[15%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <th className="w-[12%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   Rol
                 </th>
-                <th className="w-[15%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <th className="w-[12%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   Estado
                 </th>
-                <th className="w-[25%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <th className="w-[12%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                  Premium
+                </th>
+                <th className="w-[18%] px-6 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   Registrado
                 </th>
-                <th className="w-[15%] px-6 py-3 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <th className="w-[20%] px-6 py-3 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   Acciones
                 </th>
               </tr>
@@ -485,7 +577,7 @@ export default function UsuariosPage() {
                 </>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
                     No se encontraron usuarios que coincidan con los filtros
                   </td>
                 </tr>
@@ -524,20 +616,44 @@ export default function UsuariosPage() {
                         {u.is_suspended ? "Suspendido" : "Activo"}
                       </span>
                     </td>
+                    <td className="px-6 py-3 align-middle">
+                      {u.is_premium ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">
+                          <Crown className="h-3 w-3" />
+                          Premium
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-medium text-gray-500">
+                          —
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-3 text-sm text-gray-500">
                       {formatCreatedAt(u.created_at)}
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <button
-                        onClick={() => handleSuspendClick(u)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          u.is_suspended
-                            ? "border-green-100 bg-green-50 text-green-600 hover:border-green-200 hover:bg-green-100"
-                            : "border-red-100 bg-red-50 text-red-500 hover:border-red-200 hover:bg-red-100"
-                        }`}
-                      >
-                        {u.is_suspended ? "Reactivar" : "Suspender"}
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handlePremiumClick(u)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            u.is_premium
+                              ? "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100"
+                              : "border-amber-100 bg-amber-50 text-amber-600 hover:border-amber-200 hover:bg-amber-100"
+                          }`}
+                        >
+                          {u.is_premium ? "Quitar premium" : "Hacer premium"}
+                        </button>
+                        <button
+                          onClick={() => handleSuspendClick(u)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            u.is_suspended
+                              ? "border-green-100 bg-green-50 text-green-600 hover:border-green-200 hover:bg-green-100"
+                              : "border-red-100 bg-red-50 text-red-500 hover:border-red-200 hover:bg-red-100"
+                          }`}
+                        >
+                          {u.is_suspended ? "Reactivar" : "Suspender"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -564,6 +680,17 @@ export default function UsuariosPage() {
           onConfirm={handleSuspendConfirm}
           userName={suspendModal.user.full_name}
           isSuspended={suspendModal.user.is_suspended || false}
+        />
+      )}
+
+      {/* Modal de confirmación para premium */}
+      {premiumModal.user && (
+        <PremiumConfirmModal
+          isOpen={premiumModal.isOpen}
+          onClose={() => setPremiumModal({ isOpen: false, user: null })}
+          onConfirm={handlePremiumConfirm}
+          userName={premiumModal.user.full_name}
+          isPremium={premiumModal.user.is_premium || false}
         />
       )}
 

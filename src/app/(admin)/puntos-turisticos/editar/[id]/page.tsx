@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -8,6 +9,7 @@ import PageHeader from "@/components/admin/page-header";
 import { api } from "@/lib/api";
 import { uploadTouristPlaceFile } from "@/lib/supabaseClient";
 import { compressToWebp, isAllowed } from "@/lib/image";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   PLACE_CATEGORIES,
   placeCategoryLabels,
@@ -40,6 +42,12 @@ interface MediaFile {
   order: number;
 }
 
+interface TrailOption {
+  id: string;
+  name: string;
+  difficulty?: string | null;
+}
+
 export default function EditarPuntoTuristicoPage() {
   const router = useRouter();
   const params = useParams();
@@ -58,6 +66,11 @@ export default function EditarPuntoTuristicoPage() {
     country: "Argentina",
   });
   const [mapPoint, setMapPoint] = useState<[number, number] | null>(null);
+  const [selectedTrails, setSelectedTrails] = useState<TrailOption[]>([]);
+  const [trailSearch, setTrailSearch] = useState("");
+  const [trailSearchResults, setTrailSearchResults] = useState<TrailOption[]>([]);
+  const [trailSearchLoading, setTrailSearchLoading] = useState(false);
+  const debouncedTrailSearch = useDebouncedValue(trailSearch, 300);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
   const [mediaToDelete, setMediaToDelete] = useState<string[]>([]);
@@ -98,6 +111,17 @@ export default function EditarPuntoTuristicoPage() {
         ) {
           setMapPoint([place.latitude, place.longitude]);
         }
+        if (place.trails && Array.isArray(place.trails)) {
+          setSelectedTrails(
+            place.trails.map((t: any) => ({
+              id: t.id,
+              name: t.name,
+              difficulty: t.difficulty ?? null,
+            }))
+          );
+        } else {
+          setSelectedTrails([]);
+        }
         if (place.media && Array.isArray(place.media)) {
           const loaded: MediaFile[] = place.media.map((m: any, i: number) => ({
             id: m.id || `media-${i}`,
@@ -130,6 +154,47 @@ export default function EditarPuntoTuristicoPage() {
       });
     };
   }, []);
+
+  useEffect(() => {
+    const query = debouncedTrailSearch.trim();
+    if (!query) {
+      setTrailSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    setTrailSearchLoading(true);
+    api
+      .getTrails({ search: query, limit: 10 })
+      .then((res) => {
+        if (cancelled) return;
+        setTrailSearchResults(
+          res.trails.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            difficulty: t.difficulty ?? null,
+          }))
+        );
+      })
+      .catch((err) => console.error("Error buscando senderos:", err))
+      .finally(() => {
+        if (!cancelled) setTrailSearchLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedTrailSearch]);
+
+  const addTrail = (trail: TrailOption) => {
+    setSelectedTrails((prev) =>
+      prev.some((t) => t.id === trail.id) ? prev : [...prev, trail]
+    );
+    setTrailSearch("");
+    setTrailSearchResults([]);
+  };
+
+  const removeTrail = (trailId: string) => {
+    setSelectedTrails((prev) => prev.filter((t) => t.id !== trailId));
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -286,6 +351,7 @@ export default function EditarPuntoTuristicoPage() {
                   latitude: mapPoint[0],
                   longitude: mapPoint[1],
                 },
+                trail_ids: selectedTrails.map((t) => t.id),
               });
 
               for (const mediaId of mediaToDelete) {
@@ -451,6 +517,74 @@ export default function EditarPuntoTuristicoPage() {
               </div>
             </section>
           </div>
+
+          <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Senderos vinculados
+            </h3>
+            <p className="mb-3 text-xs text-gray-500">
+              Vinculá los senderos relacionados con este punto turístico.
+            </p>
+            <div className="relative">
+              <input
+                type="text"
+                value={trailSearch}
+                onChange={(e) => setTrailSearch(e.target.value)}
+                placeholder="Buscar sendero por nombre..."
+                className="w-full rounded-lg border border-[#EBEBEB] bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors focus:border-[#3FA9F5] focus:ring-2 focus:ring-[#3FA9F5]/10"
+              />
+              {trailSearch.trim() && (
+                <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-[#EBEBEB] bg-white shadow-lg">
+                  {trailSearchLoading ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">Buscando...</div>
+                  ) : trailSearchResults.filter(
+                      (t) => !selectedTrails.some((s) => s.id === t.id)
+                    ).length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">
+                      Sin resultados
+                    </div>
+                  ) : (
+                    trailSearchResults
+                      .filter((t) => !selectedTrails.some((s) => s.id === t.id))
+                      .map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => addTrail(t)}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {t.name}
+                          {t.difficulty && (
+                            <span className="ml-2 text-xs text-gray-400">
+                              {t.difficulty}
+                            </span>
+                          )}
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedTrails.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedTrails.map((t) => (
+                  <span
+                    key={t.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#EBF5FE] px-3 py-1 text-xs font-medium text-[#3FA9F5]"
+                  >
+                    {t.name}
+                    <button
+                      type="button"
+                      onClick={() => removeTrail(t.id)}
+                      className="text-[#3FA9F5]/70 hover:text-[#3FA9F5]"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
 
           <section className="rounded-xl border border-[#EBEBEB] bg-white p-6">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">

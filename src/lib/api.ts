@@ -398,6 +398,7 @@ export const api = {
       contact_link?: string | null;
       location?: { latitude: number; longitude: number };
       is_premium?: boolean;
+      trail_ids?: string[];
     }
   ) => {
     return apiRequest<{ message: string; place: any }>(`/places/${placeId}`, {
@@ -453,6 +454,13 @@ export const api = {
     return apiRequest<{ message: string; user: any }>(`/users/${userId}/suspend`, {
       method: 'PUT',
       body: JSON.stringify({ is_suspended: isSuspended }),
+    });
+  },
+
+  setUserPremium: async (userId: string, isPremium: boolean) => {
+    return apiRequest<{ message: string; user: any }>(`/users/${userId}/premium`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_premium: isPremium }),
     });
   },
 
